@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tramplin
+      POSTGRES_USER: tramplin
+      POSTGRES_PASSWORD: tramplin
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://tramplin:tramplin@db:5432/tramplin
+      JWT_SECRET: dev-secret-change-me
+      JWT_ACCESS_TTL_MIN: "30"
+      JWT_REFRESH_TTL_DAYS: "30"
+      CORS_ORIGINS: http://localhost:5173
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+
+volumes:
+  db_data:
+
