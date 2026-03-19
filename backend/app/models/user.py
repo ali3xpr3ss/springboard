@@ -21,6 +21,6 @@ class User(Base):
 
     applicant_profile = relationship("ApplicantProfile", back_populates="user", uselist=False)
     employer_profile = relationship("EmployerProfile", back_populates="user", uselist=False)
-    curator_profile = relationship("CuratorProfile", back_populates="user", uselist=False)
+    curator_profile = relationship("CuratorProfile", back_populates="user", uselist=False, foreign_keys="[CuratorProfile.user_id]")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
 

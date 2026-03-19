@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..auth.deps import require_role
@@ -9,10 +10,14 @@ from ..models import (
     EmployerProfile,
     Opportunity,
     OpportunityStatus,
+    Tag,
+    TagCategory,
     User,
     UserRole,
     VerificationStatus,
 )
+from ..schemas.tag import TagCreate, TagOut
+from ..schemas.user import UserOut
 
 
 router = APIRouter(prefix="/curator", tags=["curator"])
@@ -101,3 +106,52 @@ def moderate_opportunity(
     db.commit()
     return {"ok": True, "status": o.status}
 
+
+@router.post("/tags", response_model=TagOut, status_code=status.HTTP_201_CREATED)
+def create_tag(
+    payload: TagCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.curator)),
+) -> TagOut:
+    _require_curator(db, user)
+
+    existing = db.scalar(select(Tag).where(Tag.slug == payload.slug))
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Slug уже занят")
+
+    t = Tag(name=payload.name, slug=payload.slug, category=payload.category, is_system=False, usage_count=0)
+    db.add(t)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Slug уже занят")
+    db.refresh(t)
+    return TagOut(id=t.id, name=t.name, slug=t.slug, category=t.category, is_system=t.is_system, usage_count=t.usage_count)
+
+
+@router.get("/users", response_model=list[UserOut])
+def list_users(
+    role: UserRole | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.curator)),
+) -> list[UserOut]:
+    _require_curator(db, user)
+
+    stmt = select(User)
+    if role is not None:
+        stmt = stmt.where(User.role == role)
+    stmt = stmt.order_by(User.created_at.desc())
+    users = db.scalars(stmt).all()
+    return [
+        UserOut(
+            id=u.id,
+            email=u.email,
+            display_name=u.display_name,
+            role=u.role,
+            is_active=u.is_active,
+            avatar_url=u.avatar_url,
+            created_at=u.created_at,
+        )
+        for u in users
+    ]

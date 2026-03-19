@@ -1,6 +1,9 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
-from ..models.enums import PrivacyLevel
+from ..models.enums import ApplicationStatus, ContactStatus, PrivacyLevel
+from .opportunity import OpportunityOut
 
 
 class ApplicantProfileOut(BaseModel):
@@ -12,6 +15,7 @@ class ApplicantProfileOut(BaseModel):
     github_url: str | None = None
     privacy_resume: PrivacyLevel
     privacy_applications: PrivacyLevel
+    skill_tag_ids: list[int] = []
 
 
 class ApplicantProfileUpdate(BaseModel):
@@ -23,4 +27,31 @@ class ApplicantProfileUpdate(BaseModel):
     github_url: str | None = Field(default=None, max_length=500)
     privacy_resume: PrivacyLevel | None = None
     privacy_applications: PrivacyLevel | None = None
+    skill_tag_ids: list[int] | None = None
+
+
+class ApplicationCreate(BaseModel):
+    cover_letter: str | None = None
+
+
+class ApplicationOut(BaseModel):
+    id: int
+    opportunity_id: int
+    status: ApplicationStatus
+    cover_letter: str | None
+    created_at: datetime
+    opportunity: OpportunityOut
+
+
+class ContactRequest(BaseModel):
+    receiver_id: int
+
+
+class ContactOut(BaseModel):
+    id: int
+    other_applicant_id: int
+    other_full_name: str | None
+    status: ContactStatus
+    created_at: datetime
+    is_requester: bool
 

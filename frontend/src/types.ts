@@ -38,3 +38,46 @@ export type OpportunityQuery = {
   city?: string;
 };
 
+export type ApplicationStatus = "pending" | "accepted" | "rejected" | "reserve";
+
+export type ApplicationOut = {
+  id: number;
+  opportunity_id: number;
+  status: ApplicationStatus;
+  cover_letter: string | null;
+  created_at: string;
+  opportunity: Opportunity;
+};
+
+export type EmployerApplicationOut = {
+  id: number;
+  opportunity_id: number;
+  opportunity_title: string;
+  applicant_profile_id: number;
+  applicant_full_name: string | null;
+  status: ApplicationStatus;
+  cover_letter: string | null;
+  created_at: string;
+};
+
+export type TagCategory = "tech" | "level" | "employment" | "other";
+
+export type TagOut = {
+  id: number;
+  name: string;
+  slug: string;
+  category: TagCategory;
+  is_system: boolean;
+  usage_count: number;
+};
+
+export type UserOut = {
+  id: number;
+  email: string;
+  display_name: string;
+  role: "applicant" | "employer" | "curator";
+  is_active: boolean;
+  avatar_url: string | null;
+  created_at: string;
+};
+

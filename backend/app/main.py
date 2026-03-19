@@ -6,6 +6,7 @@ from .api.applicant import router as applicant_router
 from .api.employer import router as employer_router
 from .api.opportunities import router as opportunities_router
 from .api.curator import router as curator_router
+from .api.tags import router as tags_router
 from .db.base import Base
 from .db.session import engine
 from .seed.admin import ensure_admin_curator
@@ -34,6 +35,7 @@ app.include_router(applicant_router)
 app.include_router(employer_router)
 app.include_router(opportunities_router)
 app.include_router(curator_router)
+app.include_router(tags_router)
 
 
 @app.on_event("startup")

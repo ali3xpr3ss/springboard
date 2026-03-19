@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { fetchOpportunities } from "./api";
+import { fetchOpportunities, fetchTags } from "./api";
 import { MapPanel } from "./components/MapPanel";
 import { OpportunityCard } from "./components/OpportunityCard";
+import { OpportunityModal } from "./components/OpportunityModal";
+import { ApplyModal } from "./components/ApplyModal";
+import { TagSelector } from "./components/TagSelector";
 import { loadSession } from "./auth/auth";
 import { loadFavoriteIds, toggleFavorite } from "./storage/favorites";
-import type { Opportunity, OpportunityQuery, OpportunityType, WorkFormat } from "./types";
+import type { Opportunity, OpportunityQuery, OpportunityType, TagOut, WorkFormat } from "./types";
 import { buttonStyle, cardStyle, inputStyle } from "./ui/styles";
 
 type ViewMode = "map" | "list";
@@ -41,6 +44,15 @@ export default function App() {
   const [salaryTo, setSalaryTo] = useState<string>("");
   const [city, setCity] = useState<string>("");
 
+  const [allTags, setAllTags] = useState<TagOut[]>([]);
+  const [tagIds, setTagIds] = useState<Set<number>>(new Set());
+  const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
+  const [applyTarget, setApplyTarget] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchTags().then(setAllTags).catch(() => {});
+  }, []);
+
   const query: OpportunityQuery = useMemo(() => {
     const sf = salaryFrom.trim() ? Number(salaryFrom) : undefined;
     const st = salaryTo.trim() ? Number(salaryTo) : undefined;
@@ -48,11 +60,12 @@ export default function App() {
       q: q.trim() || undefined,
       types: types.size ? Array.from(types) : undefined,
       formats: formats.size ? Array.from(formats) : undefined,
+      tag_ids: tagIds.size ? Array.from(tagIds) : undefined,
       salary_from: Number.isFinite(sf as any) ? sf : undefined,
       salary_to: Number.isFinite(st as any) ? st : undefined,
       city: city.trim() || undefined,
     };
-  }, [q, types, formats, salaryFrom, salaryTo, city]);
+  }, [q, types, formats, tagIds, salaryFrom, salaryTo, city]);
 
   useEffect(() => {
     let alive = true;
@@ -246,6 +259,13 @@ export default function App() {
                   </div>
                 </div>
 
+                {allTags.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>Теги</div>
+                    <TagSelector tags={allTags} selected={tagIds} onChange={setTagIds} />
+                  </div>
+                )}
+
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>ЗП от</div>
@@ -268,6 +288,7 @@ export default function App() {
                       setSalaryTo("");
                       setTypes(new Set());
                       setFormats(new Set());
+                      setTagIds(new Set());
                     }}
                   >
                     Сбросить
@@ -296,9 +317,8 @@ export default function App() {
               <MapPanel
                 opportunities={itemsWithCoords}
                 favoriteIds={favoriteIds}
-                onSelect={(o) => {
+                onSelect={() => {
                   setView("list");
-                  // можно будет сделать прокрутку к карточке; пока просто переключаемся
                 }}
               />
             ) : (
@@ -311,6 +331,7 @@ export default function App() {
                         o={o}
                         isFavorite={favoriteIds.has(o.id)}
                         onToggleFavorite={(id) => setFavoriteIds(new Set(toggleFavorite(id)))}
+                        onFocus={() => setSelectedOpp(o)}
                       />
                     ))}
                   </div>
@@ -322,7 +343,24 @@ export default function App() {
           </section>
         </div>
       </main>
+
+      {selectedOpp && (
+        <OpportunityModal
+          opportunity={selectedOpp}
+          session={session}
+          onClose={() => setSelectedOpp(null)}
+          onApply={(id) => { setApplyTarget(id); setSelectedOpp(null); }}
+        />
+      )}
+      {applyTarget !== null && session && (
+        <ApplyModal
+          opportunityId={applyTarget}
+          opportunityTitle={items.find((o) => o.id === applyTarget)?.title ?? ""}
+          session={session}
+          onClose={() => setApplyTarget(null)}
+          onSuccess={() => setApplyTarget(null)}
+        />
+      )}
     </div>
   );
 }
-
