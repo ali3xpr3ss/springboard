@@ -25,6 +25,8 @@ export type Opportunity = {
   published_at: string;
   expires_at?: string | null;
   event_date?: string | null;
+  scheduled_at?: string | null;
+  company_name?: string | null;
   tags: Tag[];
 };
 
@@ -78,6 +80,27 @@ export type UserOut = {
   role: "applicant" | "employer" | "curator";
   is_active: boolean;
   avatar_url: string | null;
+  created_at: string;
+};
+
+export type ContactStatus = "pending" | "accepted" | "rejected";
+
+export type ContactOut = {
+  id: number;
+  other_applicant_id: number;
+  other_full_name: string | null;
+  status: ContactStatus;
+  created_at: string;
+  is_requester: boolean;
+};
+
+export type RecommendationOut = {
+  id: number;
+  from_applicant_id: number;
+  from_full_name: string | null;
+  opportunity_id: number;
+  opportunity_title: string;
+  message: string | null;
   created_at: string;
 };
 

@@ -18,6 +18,7 @@ class OpportunityBase(BaseModel):
     salary_to: int | None = None
     expires_at: datetime | None = None
     event_date: datetime | None = None
+    scheduled_at: datetime | None = None
     tag_ids: list[int] = []
 
 
@@ -38,6 +39,7 @@ class OpportunityUpdate(BaseModel):
     salary_to: int | None = None
     expires_at: datetime | None = None
     event_date: datetime | None = None
+    scheduled_at: datetime | None = None
     tag_ids: list[int] | None = None  # None = не трогать теги
 
 
@@ -58,5 +60,7 @@ class OpportunityOut(BaseModel):
     published_at: datetime
     expires_at: datetime | None
     event_date: datetime | None
+    scheduled_at: datetime | None = None
+    company_name: str | None = None
     tags: list[dict]
 

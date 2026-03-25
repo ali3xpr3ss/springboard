@@ -10,6 +10,7 @@ export type Session = {
 };
 
 const KEY = "tramplin:session";
+const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:8000";
 
 export function loadSession(): Session | null {
   try {
@@ -31,3 +32,24 @@ export function authHeader(session: Session | null): HeadersInit {
   return { Authorization: `Bearer ${session.access_token}` };
 }
 
+/** Возвращает true, если access-токен истёк или истекает в течение 60 секунд */
+export function isExpiringSoon(session: Session): boolean {
+  return new Date(session.access_expires_at).getTime() - Date.now() < 60_000;
+}
+
+/** Обновляет access/refresh токены через /auth/refresh. Сохраняет новую сессию в localStorage. */
+export async function refreshSession(session: Session): Promise<Session | null> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ refresh_token: session.refresh_token }),
+    });
+    if (!res.ok) return null;
+    const newSession: Session = await res.json();
+    saveSession(newSession);
+    return newSession;
+  } catch {
+    return null;
+  }
+}

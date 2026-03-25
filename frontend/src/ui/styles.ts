@@ -17,7 +17,7 @@ export const buttonStyle: React.CSSProperties = {
 export const inputStyle: React.CSSProperties = {
   width: "100%",
   border: "1px solid var(--border)",
-  background: "rgba(0,0,0,0.25)",
+  background: "#0f1829",
   color: "var(--text)",
   borderRadius: 12,
   padding: "10px 12px",

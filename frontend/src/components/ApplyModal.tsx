@@ -36,7 +36,7 @@ export function ApplyModal({ opportunityId, opportunityTitle, session, onClose, 
       onClick={onClose}
     >
       <div
-        style={{ ...cardStyle, maxWidth: 520, width: "100%", position: "relative" }}
+        style={{ ...cardStyle, background: "#0f1829", maxWidth: 520, width: "100%", position: "relative" }}
         onClick={(e) => e.stopPropagation()}
       >
         <button

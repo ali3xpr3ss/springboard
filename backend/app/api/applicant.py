@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import require_role
 from ..db.session import get_db
-from ..models import Application, ApplicantProfile, Contact, ContactStatus, Favorite, Opportunity, User, UserRole
+from ..models import Application, ApplicantProfile, Contact, ContactStatus, Favorite, Opportunity, Recommendation, User, UserRole
 from ..models.tags import ApplicantSkill
 from ..schemas.applicant import (
     ApplicantProfileOut,
@@ -13,6 +13,9 @@ from ..schemas.applicant import (
     ApplicationOut,
     ContactOut,
     ContactRequest,
+    ContactStatusUpdate,
+    RecommendationCreate,
+    RecommendationOut,
 )
 from ..schemas.opportunity import OpportunityOut
 from .opportunities import _build_opportunity_outs
@@ -168,4 +171,110 @@ def create_contact(
         created_at=contact.created_at,
         is_requester=True,
     )
+
+
+@router.patch("/contacts/{contact_id}", response_model=ContactOut)
+def update_contact_status(
+    contact_id: int,
+    payload: ContactStatusUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.applicant)),
+) -> ContactOut:
+    profile = db.scalar(select(ApplicantProfile).where(ApplicantProfile.user_id == user.id))
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Профиль не найден")
+    contact = db.get(Contact, contact_id)
+    if not contact:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Контакт не найден")
+    if contact.receiver_id != profile.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Только получатель может принять или отклонить запрос")
+    if payload.status not in (ContactStatus.accepted, ContactStatus.rejected):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Допустимые статусы: accepted, rejected")
+    contact.status = payload.status
+    db.commit()
+    db.refresh(contact)
+    requester = db.get(ApplicantProfile, contact.requester_id)
+    return ContactOut(
+        id=contact.id,
+        other_applicant_id=contact.requester_id,
+        other_full_name=requester.full_name if requester else None,
+        status=contact.status,
+        created_at=contact.created_at,
+        is_requester=False,
+    )
+
+
+@router.post("/contacts/{contact_id}/recommend", response_model=RecommendationOut, status_code=status.HTTP_201_CREATED)
+def create_recommendation(
+    contact_id: int,
+    payload: RecommendationCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.applicant)),
+) -> RecommendationOut:
+    profile = db.scalar(select(ApplicantProfile).where(ApplicantProfile.user_id == user.id))
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Профиль не найден")
+    contact = db.get(Contact, contact_id)
+    if not contact or contact.status != ContactStatus.accepted:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Контакт не найден или не принят")
+    if contact.requester_id == profile.id:
+        to_id = contact.receiver_id
+    elif contact.receiver_id == profile.id:
+        to_id = contact.requester_id
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к этому контакту")
+    opp = db.get(Opportunity, payload.opportunity_id)
+    if not opp:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Возможность не найдена")
+    rec = Recommendation(
+        from_applicant_id=profile.id,
+        to_applicant_id=to_id,
+        opportunity_id=payload.opportunity_id,
+        message=payload.message,
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    return RecommendationOut(
+        id=rec.id,
+        from_applicant_id=profile.id,
+        from_full_name=profile.full_name,
+        opportunity_id=opp.id,
+        opportunity_title=opp.title,
+        message=rec.message,
+        created_at=rec.created_at,
+    )
+
+
+@router.get("/recommendations", response_model=list[RecommendationOut])
+def get_recommendations(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.applicant)),
+) -> list[RecommendationOut]:
+    profile = db.scalar(select(ApplicantProfile).where(ApplicantProfile.user_id == user.id))
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Профиль не найден")
+    recs = list(db.scalars(
+        select(Recommendation)
+        .where(Recommendation.to_applicant_id == profile.id)
+        .order_by(Recommendation.created_at.desc())
+    ).all())
+    if not recs:
+        return []
+    from_ids = list({r.from_applicant_id for r in recs})
+    opp_ids = list({r.opportunity_id for r in recs})
+    profiles_map = {p.id: p for p in db.scalars(select(ApplicantProfile).where(ApplicantProfile.id.in_(from_ids))).all()}
+    opps_map = {o.id: o for o in db.scalars(select(Opportunity).where(Opportunity.id.in_(opp_ids))).all()}
+    return [
+        RecommendationOut(
+            id=r.id,
+            from_applicant_id=r.from_applicant_id,
+            from_full_name=profiles_map.get(r.from_applicant_id, ApplicantProfile()).full_name if r.from_applicant_id in profiles_map else None,
+            opportunity_id=r.opportunity_id,
+            opportunity_title=opps_map[r.opportunity_id].title if r.opportunity_id in opps_map else "",
+            message=r.message,
+            created_at=r.created_at,
+        )
+        for r in recs
+    ]
 

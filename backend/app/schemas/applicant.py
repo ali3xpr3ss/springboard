@@ -55,3 +55,22 @@ class ContactOut(BaseModel):
     created_at: datetime
     is_requester: bool
 
+
+class ContactStatusUpdate(BaseModel):
+    status: ContactStatus
+
+
+class RecommendationCreate(BaseModel):
+    opportunity_id: int
+    message: str | None = None
+
+
+class RecommendationOut(BaseModel):
+    id: int
+    from_applicant_id: int
+    from_full_name: str | None
+    opportunity_id: int
+    opportunity_title: str
+    message: str | None
+    created_at: datetime
+

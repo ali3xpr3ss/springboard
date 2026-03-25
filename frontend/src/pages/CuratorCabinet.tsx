@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { fetchTags, createTag, fetchUsers } from "../api";
+import { fetchTags, createTag, fetchUsers, fetchCuratorMe, createCurator, setUserActive, authedFetch } from "../api";
 import { loadSession } from "../auth/auth";
 import type { TagOut, TagCategory, UserOut } from "../types";
 import { buttonStyle, cardStyle, inputStyle } from "../ui/styles";
@@ -26,7 +26,7 @@ type PendingOpportunity = {
   status: string;
 };
 
-type Tab = "employers" | "opportunities" | "tags" | "users";
+type Tab = "employers" | "opportunities" | "tags" | "users" | "curators";
 
 const tabActiveStyle = { background: "rgba(124,58,237,0.22)", borderColor: "rgba(124,58,237,0.55)" };
 
@@ -52,6 +52,7 @@ const ROLE_COLORS: Record<string, { bg: string; border: string }> = {
 export function CuratorCabinet() {
   const session = loadSession();
   const [tab, setTab] = useState<Tab>("employers");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [emp, setEmp] = useState<PendingEmployer[]>([]);
   const [opp, setOpp] = useState<PendingOpportunity[]>([]);
@@ -69,13 +70,29 @@ export function CuratorCabinet() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [roleFilter, setRoleFilter] = useState<string>("");
 
+  // Curators tab
+  const [newCurEmail, setNewCurEmail] = useState("");
+  const [newCurName, setNewCurName] = useState("");
+  const [newCurPass, setNewCurPass] = useState("");
+  const [curCreating, setCurCreating] = useState(false);
+  const [curError, setCurError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    fetchCuratorMe(session)
+      .then((data) => setIsAdmin(data.is_admin))
+      .catch(() => {});
+    reload();
+    fetchTags().then(setTags).catch(() => {});
+  }, []);
+
   async function reload() {
     if (!session) return;
     setError(null);
     try {
       const [eRes, oRes] = await Promise.all([
-        fetch(`${API_BASE}/curator/employers/pending`, { headers: { Authorization: `Bearer ${session.access_token}` } }),
-        fetch(`${API_BASE}/curator/opportunities/pending`, { headers: { Authorization: `Bearer ${session.access_token}` } }),
+        authedFetch(session, `${API_BASE}/curator/employers/pending`),
+        authedFetch(session, `${API_BASE}/curator/opportunities/pending`),
       ]);
       if (!eRes.ok) throw new Error(await eRes.text());
       if (!oRes.ok) throw new Error(await oRes.text());
@@ -85,11 +102,6 @@ export function CuratorCabinet() {
       setError(e?.message ?? "Ошибка");
     }
   }
-
-  useEffect(() => {
-    reload();
-    fetchTags().then(setTags).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (tab !== "users" || !session) return;
@@ -108,7 +120,6 @@ export function CuratorCabinet() {
 
   if (!session) return <div style={cardStyle}>Нужно войти.</div>;
 
-  // Group tags by category
   const tagGroups = new Map<TagCategory, TagOut[]>();
   for (const tag of tags) {
     const cat = tag.category as TagCategory;
@@ -116,19 +127,27 @@ export function CuratorCabinet() {
     tagGroups.get(cat)!.push(tag);
   }
 
+  const visibleTabs: { id: Tab; label: string }[] = [
+    { id: "employers", label: "Компании" },
+    { id: "opportunities", label: "Карточки" },
+    { id: "tags", label: "Теги" },
+    { id: "users", label: "Пользователи" },
+    ...(isAdmin ? [{ id: "curators" as Tab, label: "Кураторы" }] : []),
+  ];
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={cardStyle}>
-        <div style={{ fontWeight: 900, fontSize: 16 }}>Панель куратора</div>
+        <div style={{ fontWeight: 900, fontSize: 16 }}>Панель куратора{isAdmin ? " (Администратор)" : ""}</div>
         <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {(["employers", "opportunities", "tags", "users"] as Tab[]).map((t) => (
+          {visibleTabs.map(({ id, label }) => (
             <button
-              key={t}
+              key={id}
               type="button"
-              style={{ ...buttonStyle, ...(tab === t ? tabActiveStyle : {}) }}
-              onClick={() => setTab(t)}
+              style={{ ...buttonStyle, ...(tab === id ? tabActiveStyle : {}) }}
+              onClick={() => setTab(id)}
             >
-              {{ employers: "Компании", opportunities: "Карточки", tags: "Теги", users: "Пользователи" }[t]}
+              {label}
             </button>
           ))}
         </div>
@@ -151,7 +170,7 @@ export function CuratorCabinet() {
                       type="button"
                       style={{ ...buttonStyle, background: "rgba(34,197,94,0.18)", borderColor: "rgba(34,197,94,0.5)" }}
                       onClick={async () => {
-                        await fetch(`${API_BASE}/curator/employers/${e.id}/verify?action=approve`, { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } });
+                        await authedFetch(session, `${API_BASE}/curator/employers/${e.id}/verify?action=approve`, { method: "POST" });
                         reload();
                       }}
                     >
@@ -161,7 +180,7 @@ export function CuratorCabinet() {
                       type="button"
                       style={{ ...buttonStyle, background: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.45)" }}
                       onClick={async () => {
-                        await fetch(`${API_BASE}/curator/employers/${e.id}/verify?action=reject`, { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } });
+                        await authedFetch(session, `${API_BASE}/curator/employers/${e.id}/verify?action=reject`, { method: "POST" });
                         reload();
                       }}
                     >
@@ -193,7 +212,7 @@ export function CuratorCabinet() {
                       type="button"
                       style={{ ...buttonStyle, background: "rgba(34,197,94,0.18)", borderColor: "rgba(34,197,94,0.5)" }}
                       onClick={async () => {
-                        await fetch(`${API_BASE}/curator/opportunities/${o.id}/moderate?action=approve`, { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } });
+                        await authedFetch(session, `${API_BASE}/curator/opportunities/${o.id}/moderate?action=approve`, { method: "POST" });
                         reload();
                       }}
                     >
@@ -203,7 +222,7 @@ export function CuratorCabinet() {
                       type="button"
                       style={{ ...buttonStyle, background: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.45)" }}
                       onClick={async () => {
-                        await fetch(`${API_BASE}/curator/opportunities/${o.id}/moderate?action=reject`, { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` } });
+                        await authedFetch(session, `${API_BASE}/curator/opportunities/${o.id}/moderate?action=reject`, { method: "POST" });
                         reload();
                       }}
                     >
@@ -325,17 +344,19 @@ export function CuratorCabinet() {
             <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
               {users.map((u) => {
                 const rc = ROLE_COLORS[u.role] ?? { bg: "rgba(255,255,255,0.08)", border: "var(--border)" };
+                const isSelf = u.id === session.user_id;
                 return (
                   <div
                     key={u.id}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "1fr 1fr auto auto auto",
+                      gridTemplateColumns: "1fr 1fr auto auto auto auto",
                       gap: 10,
                       alignItems: "center",
                       border: "1px solid var(--border)",
                       borderRadius: 10,
                       padding: "10px 12px",
+                      opacity: u.is_active ? 1 : 0.6,
                     }}
                   >
                     <div style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</div>
@@ -349,11 +370,89 @@ export function CuratorCabinet() {
                     <div style={{ fontSize: 11, color: "var(--muted)" }}>
                       {new Date(u.created_at).toLocaleDateString("ru-RU")}
                     </div>
+                    <button
+                      type="button"
+                      disabled={isSelf}
+                      style={{
+                        ...buttonStyle,
+                        padding: "4px 10px",
+                        fontSize: 11,
+                        opacity: isSelf ? 0.4 : 1,
+                        cursor: isSelf ? "not-allowed" : "pointer",
+                        background: u.is_active ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)",
+                        borderColor: u.is_active ? "rgba(239,68,68,0.45)" : "rgba(34,197,94,0.45)",
+                      }}
+                      onClick={async () => {
+                        if (isSelf) return;
+                        try {
+                          const updated = await setUserActive(session, u.id, !u.is_active);
+                          setUsers((prev) => prev.map((x) => (x.id === u.id ? updated : x)));
+                        } catch (e: any) {
+                          alert(e?.message ?? "Ошибка");
+                        }
+                      }}
+                    >
+                      {u.is_active ? "Заблокировать" : "Разблокировать"}
+                    </button>
                   </div>
                 );
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {tab === "curators" && isAdmin && (
+        <div style={cardStyle}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Создать куратора</div>
+          <div style={{ marginTop: 4, fontSize: 12, color: "var(--muted)" }}>
+            Только администратор может создавать учётные записи кураторов.
+          </div>
+          {curError && <div style={{ marginTop: 10, color: "rgba(245,158,11,0.95)", whiteSpace: "pre-wrap" }}>{curError}</div>}
+          <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+            <input style={inputStyle} placeholder="Email куратора" value={newCurEmail} onChange={(e) => setNewCurEmail(e.target.value)} />
+            <input style={inputStyle} placeholder="Отображаемое имя" value={newCurName} onChange={(e) => setNewCurName(e.target.value)} />
+            <input style={inputStyle} type="password" placeholder="Пароль (мин. 6 символов)" value={newCurPass} onChange={(e) => setNewCurPass(e.target.value)} />
+            <button
+              type="button"
+              style={{ ...buttonStyle, background: "rgba(124,58,237,0.22)", borderColor: "rgba(124,58,237,0.55)" }}
+              disabled={curCreating || !newCurEmail.trim() || !newCurName.trim() || newCurPass.length < 6}
+              onClick={async () => {
+                setCurCreating(true);
+                setCurError(null);
+                try {
+                  await createCurator(session, { email: newCurEmail.trim(), display_name: newCurName.trim(), password: newCurPass });
+                  setNewCurEmail("");
+                  setNewCurName("");
+                  setNewCurPass("");
+                  alert("Куратор создан");
+                  // refresh users list
+                  fetchUsers(session, "curator").then((data) => setUsers(data)).catch(() => {});
+                } catch (e: any) {
+                  setCurError(e?.message ?? "Ошибка создания куратора");
+                } finally {
+                  setCurCreating(false);
+                }
+              }}
+            >
+              {curCreating ? "Создаём…" : "Создать куратора"}
+            </button>
+          </div>
+
+          <div style={{ marginTop: 20, fontWeight: 600, fontSize: 14 }}>Список кураторов</div>
+          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            {users
+              .filter((u) => u.role === "curator")
+              .map((u) => (
+                <div key={u.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", display: "flex", gap: 12, alignItems: "center" }}>
+                  <div style={{ flex: 1, fontSize: 13 }}>{u.email}</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)" }}>{u.display_name}</div>
+                  <span style={{ fontSize: 11, color: u.is_active ? "rgba(34,197,94,0.9)" : "rgba(245,158,11,0.9)" }}>
+                    {u.is_active ? "● Активен" : "○ Заблокирован"}
+                  </span>
+                </div>
+              ))}
+          </div>
         </div>
       )}
     </div>

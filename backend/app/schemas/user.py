@@ -13,3 +13,7 @@ class UserOut(BaseModel):
     is_active: bool
     avatar_url: str | None
     created_at: datetime
+
+
+class UserActiveUpdate(BaseModel):
+    is_active: bool

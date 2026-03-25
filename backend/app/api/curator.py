@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..auth.deps import require_role
+from ..auth.security import hash_password
 from ..db.session import get_db
 from ..models import (
     CuratorProfile,
@@ -16,8 +17,9 @@ from ..models import (
     UserRole,
     VerificationStatus,
 )
+from ..schemas.curator import CuratorCreate, CuratorOut
 from ..schemas.tag import TagCreate, TagOut
-from ..schemas.user import UserOut
+from ..schemas.user import UserActiveUpdate, UserOut
 
 
 router = APIRouter(prefix="/curator", tags=["curator"])
@@ -28,6 +30,71 @@ def _require_curator(db: Session, user: User) -> CuratorProfile:
     if not c:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Профиль куратора не найден")
     return c
+
+
+def _require_admin_curator(db: Session, user: User) -> CuratorProfile:
+    c = _require_curator(db, user)
+    if not c.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Только администратор может выполнять это действие")
+    return c
+
+
+@router.get("/me")
+def curator_me(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.curator)),
+) -> dict:
+    c = _require_curator(db, user)
+    return {"is_admin": c.is_admin}
+
+
+@router.post("/curators", response_model=CuratorOut, status_code=status.HTTP_201_CREATED)
+def create_curator(
+    payload: CuratorCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.curator)),
+) -> CuratorOut:
+    _require_admin_curator(db, user)
+    existing = db.scalar(select(User).where(User.email == payload.email))
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email уже занят")
+    new_user = User(
+        email=payload.email,
+        display_name=payload.display_name,
+        hashed_password=hash_password(payload.password),
+        role=UserRole.curator,
+        is_active=True,
+    )
+    db.add(new_user)
+    db.flush()
+    profile = CuratorProfile(user_id=new_user.id, is_admin=False, created_by_id=user.id)
+    db.add(profile)
+    db.commit()
+    db.refresh(new_user)
+    return CuratorOut(id=new_user.id, email=new_user.email, display_name=new_user.display_name, is_admin=False)
+
+
+@router.patch("/users/{user_id}", response_model=UserOut)
+def toggle_user_active(
+    user_id: int,
+    payload: UserActiveUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.curator)),
+) -> UserOut:
+    _require_curator(db, user)
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    if target.id == user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя изменить статус своей учётной записи")
+    target.is_active = payload.is_active
+    db.commit()
+    db.refresh(target)
+    return UserOut(
+        id=target.id, email=target.email, display_name=target.display_name,
+        role=target.role, is_active=target.is_active, avatar_url=target.avatar_url,
+        created_at=target.created_at,
+    )
 
 
 @router.get("/employers/pending")

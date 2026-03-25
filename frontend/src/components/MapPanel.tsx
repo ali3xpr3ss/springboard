@@ -23,12 +23,27 @@ const iconFavorite = new L.DivIcon({
   iconAnchor: [9, 9],
 });
 
+const TYPE_LABELS: Record<string, string> = {
+  internship: "Стажировка",
+  vacancy: "Вакансия",
+  mentoring: "Менторство",
+  event: "Мероприятие",
+};
+
+function salaryText(o: Opportunity): string | null {
+  if (o.salary_from && o.salary_to) return `${o.salary_from.toLocaleString("ru")} – ${o.salary_to.toLocaleString("ru")} ₽`;
+  if (o.salary_from) return `от ${o.salary_from.toLocaleString("ru")} ₽`;
+  if (o.salary_to) return `до ${o.salary_to.toLocaleString("ru")} ₽`;
+  return null;
+}
+
 export function MapPanel(props: {
   opportunities: Opportunity[];
   favoriteIds: Set<number>;
   onSelect: (o: Opportunity) => void;
+  onOpenModal?: (o: Opportunity) => void;
 }) {
-  const { opportunities, favoriteIds, onSelect } = props;
+  const { opportunities, favoriteIds, onSelect, onOpenModal } = props;
 
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 16, overflow: "hidden" }}>
@@ -47,22 +62,28 @@ export function MapPanel(props: {
           .filter((o) => typeof o.lat === "number" && typeof o.lng === "number")
           .map((o) => {
             const fav = favoriteIds.has(o.id);
+            const salary = salaryText(o);
             return (
               <Marker
                 key={o.id}
                 position={[o.lat as number, o.lng as number]}
                 icon={fav ? iconFavorite : iconDefault}
-                eventHandlers={{
-                  click: () => onSelect(o),
-                }}
               >
                 <Popup>
-                  <div style={{ minWidth: 220 }}>
+                  <div style={{ minWidth: 240 }}>
+                    {o.company_name && (
+                      <div style={{ fontSize: 11, color: "rgba(0,0,0,0.5)", marginBottom: 2 }}>{o.company_name}</div>
+                    )}
                     <div style={{ fontWeight: 700 }}>{o.title}</div>
-                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
+                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
+                      {TYPE_LABELS[o.opportunity_type] ?? o.opportunity_type}
+                      {" · "}
                       {o.city ?? "—"}
                       {o.address ? `, ${o.address}` : ""}
                     </div>
+                    {salary && (
+                      <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600 }}>{salary}</div>
+                    )}
                     {o.tags?.length ? (
                       <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {o.tags.slice(0, 4).map((t) => (
@@ -81,6 +102,24 @@ export function MapPanel(props: {
                         ))}
                       </div>
                     ) : null}
+                    {onOpenModal && (
+                      <button
+                        type="button"
+                        style={{
+                          marginTop: 8,
+                          width: "100%",
+                          padding: "6px 0",
+                          fontSize: 12,
+                          cursor: "pointer",
+                          background: "rgba(124,58,237,0.12)",
+                          border: "1px solid rgba(124,58,237,0.4)",
+                          borderRadius: 6,
+                        }}
+                        onClick={(e) => { e.stopPropagation(); onOpenModal(o); }}
+                      >
+                        Подробнее
+                      </button>
+                    )}
                   </div>
                 </Popup>
               </Marker>
@@ -90,4 +129,3 @@ export function MapPanel(props: {
     </div>
   );
 }
-

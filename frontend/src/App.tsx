@@ -317,9 +317,8 @@ export default function App() {
               <MapPanel
                 opportunities={itemsWithCoords}
                 favoriteIds={favoriteIds}
-                onSelect={() => {
-                  setView("list");
-                }}
+                onSelect={() => setView("list")}
+                onOpenModal={(o) => setSelectedOpp(o)}
               />
             ) : (
               <>
@@ -350,6 +349,8 @@ export default function App() {
           session={session}
           onClose={() => setSelectedOpp(null)}
           onApply={(id) => { setApplyTarget(id); setSelectedOpp(null); }}
+          isFavorite={favoriteIds.has(selectedOpp.id)}
+          onToggleFavorite={(id) => setFavoriteIds(new Set(toggleFavorite(id)))}
         />
       )}
       {applyTarget !== null && session && (

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
@@ -5,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user, require_role
 from ..db.session import get_db
+
 from ..models import (
     ApplicantProfile,
     Application,
@@ -16,6 +19,7 @@ from ..models import (
     Tag,
     User,
     UserRole,
+    VerificationStatus,
 )
 from ..schemas.applicant import ApplicationCreate, ApplicationOut
 from ..schemas.opportunity import OpportunityCreate, OpportunityOut
@@ -35,6 +39,16 @@ def _build_opportunity_outs(opps: list[Opportunity], db: Session) -> list[Opport
         ).all()
         for opp_id, tid, name, slug, cat in rows:
             tags_by_opp[opp_id].append({"id": tid, "name": name, "slug": slug, "category": cat})
+
+    employer_ids = list({o.employer_id for o in opps})
+    employer_names: dict[int, str] = {}
+    if employer_ids:
+        emp_rows = db.execute(
+            select(EmployerProfile.id, EmployerProfile.company_name)
+            .where(EmployerProfile.id.in_(employer_ids))
+        ).all()
+        employer_names = {eid: name for eid, name in emp_rows}
+
     return [
         OpportunityOut(
             id=o.id, employer_id=o.employer_id, title=o.title, description=o.description,
@@ -42,6 +56,8 @@ def _build_opportunity_outs(opps: list[Opportunity], db: Session) -> list[Opport
             city=o.city, address=o.address, lat=o.lat, lng=o.lng,
             salary_from=o.salary_from, salary_to=o.salary_to,
             published_at=o.published_at, expires_at=o.expires_at, event_date=o.event_date,
+            scheduled_at=o.scheduled_at,
+            company_name=employer_names.get(o.employer_id),
             tags=tags_by_opp.get(o.id, []),
         )
         for o in opps
@@ -98,6 +114,7 @@ def get_opportunity(opportunity_id: int, db: Session = Depends(get_db)) -> Oppor
         .where(OpportunityTag.opportunity_id == o.id)
     ).all()
     tags = [{"id": tid, "name": name, "slug": slug, "category": cat} for tid, name, slug, cat in rows]
+    emp = db.scalar(select(EmployerProfile).where(EmployerProfile.id == o.employer_id))
     return OpportunityOut(
         id=o.id,
         employer_id=o.employer_id,
@@ -115,6 +132,8 @@ def get_opportunity(opportunity_id: int, db: Session = Depends(get_db)) -> Oppor
         published_at=o.published_at,
         expires_at=o.expires_at,
         event_date=o.event_date,
+        scheduled_at=o.scheduled_at,
+        company_name=emp.company_name if emp else None,
         tags=tags,
     )
 
@@ -128,6 +147,16 @@ def create_opportunity(
     employer = db.scalar(select(EmployerProfile).where(EmployerProfile.user_id == user.id))
     if not employer:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Профиль работодателя не найден")
+    if employer.verification_status != VerificationStatus.approved:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Компания не верифицирована. Дождитесь одобрения куратора.")
+
+    now = datetime.now(timezone.utc)
+    scheduled_at = payload.scheduled_at
+    if scheduled_at is not None and scheduled_at.tzinfo is not None and scheduled_at > now:
+        initial_status = OpportunityStatus.scheduled
+    else:
+        initial_status = OpportunityStatus.pending_moderation
+        scheduled_at = None
 
     o = Opportunity(
         employer_id=employer.id,
@@ -143,7 +172,8 @@ def create_opportunity(
         salary_to=payload.salary_to,
         expires_at=payload.expires_at,
         event_date=payload.event_date,
-        status=OpportunityStatus.pending_moderation,
+        scheduled_at=scheduled_at,
+        status=initial_status,
     )
     db.add(o)
     db.flush()

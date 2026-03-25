@@ -1,65 +1,1418 @@
+from datetime import datetime, timedelta, UTC
 from sqlalchemy import select
 
+from ..auth.security import hash_password
 from ..db.session import SessionLocal
-from ..models import EmployerProfile, Opportunity, OpportunityStatus, OpportunityType, Tag, TagCategory, WorkFormat
+from ..models import (
+    ApplicantProfile,
+    Application,
+    ApplicationStatus,
+    EmployerProfile,
+    Opportunity,
+    OpportunityStatus,
+    OpportunityType,
+    Tag,
+    TagCategory,
+    User,
+    UserRole,
+    WorkFormat,
+)
+from ..models.tags import ApplicantSkill, OpportunityTag
 
 
 def ensure_demo_data() -> None:
     db = SessionLocal()
     try:
-        # system tags
+        # ── Теги ──────────────────────────────────────────────────────────────
         existing_tags = db.scalar(select(Tag.id))
         if not existing_tags:
-            tags = [
+            tag_defs = [
+                # tech
                 ("Python", "python", TagCategory.tech),
+                ("JavaScript", "javascript", TagCategory.tech),
+                ("TypeScript", "typescript", TagCategory.tech),
                 ("Java", "java", TagCategory.tech),
+                ("Go", "go", TagCategory.tech),
+                ("C++", "cpp", TagCategory.tech),
+                ("C#", "csharp", TagCategory.tech),
+                ("Rust", "rust", TagCategory.tech),
+                ("Swift", "swift", TagCategory.tech),
+                ("Kotlin", "kotlin", TagCategory.tech),
+                ("PHP", "php", TagCategory.tech),
+                ("Ruby", "ruby", TagCategory.tech),
                 ("SQL", "sql", TagCategory.tech),
+                ("React", "react", TagCategory.tech),
+                ("Vue", "vue", TagCategory.tech),
+                ("Angular", "angular", TagCategory.tech),
+                ("Node.js", "nodejs", TagCategory.tech),
+                ("FastAPI", "fastapi", TagCategory.tech),
+                ("Django", "django", TagCategory.tech),
+                ("Spring Boot", "spring", TagCategory.tech),
+                ("Docker", "docker", TagCategory.tech),
+                ("Kubernetes", "k8s", TagCategory.tech),
+                ("AWS", "aws", TagCategory.tech),
+                ("Linux", "linux", TagCategory.tech),
+                ("Git", "git", TagCategory.tech),
+                ("PostgreSQL", "postgres", TagCategory.tech),
+                ("MongoDB", "mongodb", TagCategory.tech),
+                ("Redis", "redis", TagCategory.tech),
+                ("Kafka", "kafka", TagCategory.tech),
+                ("Machine Learning", "ml", TagCategory.tech),
+                ("Android", "android", TagCategory.tech),
+                ("iOS", "ios", TagCategory.tech),
+                ("Unity", "unity", TagCategory.tech),
+                ("Figma", "figma", TagCategory.tech),
+                # level
                 ("Junior", "junior", TagCategory.level),
                 ("Middle", "middle", TagCategory.level),
+                ("Senior", "senior", TagCategory.level),
+                ("Стажёр", "intern", TagCategory.level),
+                # employment
                 ("Полная занятость", "full-time", TagCategory.employment),
                 ("Частичная занятость", "part-time", TagCategory.employment),
+                ("Проектная работа", "project", TagCategory.employment),
+                # other
+                ("Без опыта", "no-exp", TagCategory.other),
+                ("Студентам", "students", TagCategory.other),
             ]
-            for name, slug, cat in tags:
+            for name, slug, cat in tag_defs:
                 db.add(Tag(name=name, slug=slug, category=cat, is_system=True))
             db.commit()
 
-        # if there is at least one employer, but no active opportunities — create demo
-        employer = db.scalar(select(EmployerProfile).order_by(EmployerProfile.id.asc()))
-        if not employer:
-            return
-        has_active = db.scalar(select(Opportunity.id).where(Opportunity.status == OpportunityStatus.active))
-        if has_active:
+        # ── Обновляем описания существующих демо-вакансий ────────────────────
+        _demo_descriptions = {
+            "Python Backend стажёр": (
+                "Ищем студентов 3–4 курса для стажировки в команде бэкенда TechCorp.\n\n"
+                "Чем будешь заниматься:\n"
+                "— Разработка REST API на FastAPI для внутренних сервисов\n"
+                "— Работа с базой данных PostgreSQL: миграции, оптимизация запросов\n"
+                "— Написание юнит- и интеграционных тестов (pytest)\n"
+                "— Код-ревью с опытными коллегами\n\n"
+                "Требования:\n"
+                "— Знание Python на уровне написания классов и работы с библиотеками\n"
+                "— Базовое понимание SQL и реляционных баз\n"
+                "— Умение работать с Git\n\n"
+                "Что предлагаем:\n"
+                "— Менторство от Senior-разработчика с ежедневными синками\n"
+                "— Гибридный формат: 2 дня в офисе на Льва Толстого, остальное удалённо\n"
+                "— Оплата 50 000–80 000 ₽ в месяц\n"
+                "— Возможность перехода в штат по итогам стажировки"
+            ),
+            "Junior Frontend разработчик": (
+                "Присоединяйся к продуктовой команде TechCorp, которая разрабатывает "
+                "внутренние SaaS-платформы для автоматизации бизнес-процессов.\n\n"
+                "Задачи:\n"
+                "— Разработка новых UI-компонентов на React + TypeScript\n"
+                "— Интеграция с backend API (REST, частично GraphQL)\n"
+                "— Участие в планировании спринтов и груминге задач\n"
+                "— Покрытие компонентов unit-тестами (Vitest)\n\n"
+                "Требования:\n"
+                "— Уверенное знание React и TypeScript\n"
+                "— Понимание HTML/CSS, адаптивной вёрстки\n"
+                "— Опыт работы с Git (pull requests, code review)\n"
+                "— Будет плюсом: Vite, TanStack Query, Storybook\n\n"
+                "Условия:\n"
+                "— Полностью удалённый формат, гибкий рабочий день\n"
+                "— Зарплата 90 000–130 000 ₽\n"
+                "— Обучение за счёт компании, доступ к курсам и конференциям\n"
+                "— Дружная команда из 8 фронтенд-разработчиков"
+            ),
+            "Middle Python разработчик": (
+                "Ищем опытного Python-разработчика в команду платформы данных TechCorp. "
+                "Наша платформа обрабатывает более 10 млн запросов в сутки.\n\n"
+                "Что предстоит делать:\n"
+                "— Проектировать и разрабатывать микросервисы на FastAPI и asyncio\n"
+                "— Оптимизировать запросы к PostgreSQL, проектировать схемы БД\n"
+                "— Работать с Redis (кэширование, очереди), Docker, Kubernetes\n"
+                "— Участвовать в архитектурных обсуждениях и code review\n"
+                "— Следить за производительностью через Grafana и Sentry\n\n"
+                "Требования:\n"
+                "— Коммерческий опыт от 2 лет на Python\n"
+                "— Уверенное знание asyncio и работы с SQL/NoSQL\n"
+                "— Опыт с Docker и базовое понимание Kubernetes\n"
+                "— Понимание принципов SOLID, REST, DDD\n\n"
+                "Мы предлагаем:\n"
+                "— Зарплату 180 000–250 000 ₽\n"
+                "— Гибридный формат (2–3 дня в неделю в офисе)\n"
+                "— ДМС, оплату конференций (Highload++, PyCon)\n"
+                "— Интересные технические задачи без корпоративной бюрократии"
+            ),
+            "Хакатон TechCorp 2025": (
+                "TechCorp проводит ежегодный командный хакатон в Технопарке «Сколково». "
+                "В этом году тема — практическое применение генеративного ИИ.\n\n"
+                "Формат:\n"
+                "— 48 часов нон-стоп разработки командами по 3–5 человек\n"
+                "— Задача: прототип AI-сервиса, решающего реальную бизнес-проблему\n"
+                "— Менторская поддержка от инженеров TechCorp на протяжении всего хакатона\n"
+                "— Финальная презентация жюри из топ-менеджмента и технических экспертов\n\n"
+                "Призовой фонд:\n"
+                "— 1 место — 150 000 ₽\n"
+                "— 2 место — 100 000 ₽\n"
+                "— 3 место — 50 000 ₽\n"
+                "— Специальный приз зрительских симпатий — 20 000 ₽\n\n"
+                "Для кого:\n"
+                "Студенты и молодые специалисты до 3 лет опыта. Лучшие команды получат "
+                "офферы на стажировку или в штат. Питание и проживание организованы."
+            ),
+            "DevOps-инженер (стажировка)": (
+                "Стажировка в команде инфраструктуры TechCorp — идеальный старт для тех, "
+                "кто хочет войти в профессию DevOps/SRE.\n\n"
+                "Что будешь делать:\n"
+                "— Настраивать и поддерживать CI/CD пайплайны на GitLab CI\n"
+                "— Работать с Docker и Kubernetes в боевой среде\n"
+                "— Настраивать мониторинг и алертинг (Prometheus, Grafana, Alertmanager)\n"
+                "— Писать Infrastructure as Code с помощью Terraform и Helm\n"
+                "— Разбирать инциденты вместе с Senior SRE\n\n"
+                "Требования:\n"
+                "— Базовые знания Linux (командная строка, bash-скрипты)\n"
+                "— Понимание Docker на уровне написания Dockerfile\n"
+                "— Интерес к автоматизации и надёжности систем\n\n"
+                "Условия:\n"
+                "— Оплата 55 000–85 000 ₽\n"
+                "— Гибридный формат, офис на Льва Толстого\n"
+                "— Сильный ментор, задачи из первого спринта"
+            ),
+            "Java-разработчик (стажировка)": (
+                "FinTech Lab — финтех-компания с 7 млн активных пользователей. "
+                "Приглашаем студентов и выпускников в команду платёжных систем.\n\n"
+                "Задачи стажёра:\n"
+                "— Разработка новых функций в микросервисах на Java 21 + Spring Boot\n"
+                "— Работа с Kafka: написание продюсеров и консьюмеров\n"
+                "— Написание интеграционных тестов с Testcontainers\n"
+                "— Участие в код-ревью и ретроспективах команды\n\n"
+                "Требования:\n"
+                "— Знание Java на уровне ООП, коллекций, исключений\n"
+                "— Базовое понимание Spring (IoC, Spring Data)\n"
+                "— Знание SQL\n\n"
+                "Что получишь:\n"
+                "— Работа над реальными задачами в продуктовой команде с первого дня\n"
+                "— Оплата 60 000–90 000 ₽\n"
+                "— Офис в центре Петербурга, Невский 30\n"
+                "— Возможность получить оффер после стажировки"
+            ),
+            "Middle Go-разработчик": (
+                "Ищем Go-разработчика в команду процессинга платежей FinTech Lab. "
+                "Наши сервисы обрабатывают транзакции на сумму более 2 млрд ₽ в месяц.\n\n"
+                "Что будешь делать:\n"
+                "— Разрабатывать высоконагруженные микросервисы на Go\n"
+                "— Проектировать gRPC-интерфейсы между сервисами\n"
+                "— Оптимизировать запросы PostgreSQL, работать с Redis\n"
+                "— Деплоить сервисы в Kubernetes, разбирать инциденты\n"
+                "— Участвовать в архитектурных ревью новых фич\n\n"
+                "Требования:\n"
+                "— Коммерческий опыт на Go от 2 лет\n"
+                "— Понимание конкурентности (goroutines, channels, sync)\n"
+                "— Опыт с PostgreSQL, Redis, gRPC\n"
+                "— Будет плюсом: опыт в финтехе, знание PCI DSS\n\n"
+                "Условия:\n"
+                "— Зарплата 180 000–250 000 ₽\n"
+                "— Команда 6 человек, agile (2-недельные спринты)\n"
+                "— Гибридный формат, офис в Петербурге\n"
+                "— ДМС, квартальные бонусы"
+            ),
+            "Junior C# разработчик": (
+                "FinTech Lab ищет C#-разработчика в команду внутренних систем. "
+                "Занимаемся автоматизацией операционных процессов банка.\n\n"
+                "Задачи:\n"
+                "— Разработка и поддержка backend-сервисов на C# и .NET 8\n"
+                "— Работа с MSSQL: хранимые процедуры, оптимизация запросов\n"
+                "— Интеграция через RabbitMQ с внешними системами\n"
+                "— Написание unit-тестов (xUnit), участие в code review\n\n"
+                "Требования:\n"
+                "— Знание C# и .NET, понимание async/await\n"
+                "— Опыт с Entity Framework или Dapper\n"
+                "— Базовое знание SQL\n"
+                "— Будет плюсом: опыт с очередями сообщений\n\n"
+                "Предлагаем:\n"
+                "— Зарплата 100 000–140 000 ₽\n"
+                "— Полное обучение: код-стандарты, архитектура проекта, онбординг 2 недели\n"
+                "— Офис на Невском, 30 — в самом центре Петербурга\n"
+                "— Стабильная компания, белая зарплата, соцпакет"
+            ),
+            "Менторская программа по финтеху": (
+                "FinTech Lab запускает трёхмесячную менторскую программу для студентов "
+                "последних курсов и недавних выпускников, которые хотят строить карьеру в финтехе.\n\n"
+                "Как устроена программа:\n"
+                "— Каждому участнику назначается личный ментор — Senior-инженер FinTech Lab\n"
+                "— 2 встречи в неделю по 1 часу: разбор кода, карьерные советы, Q&A\n"
+                "— Практические задания на реальных задачах компании (в тестовой среде)\n"
+                "— Финальный проект с презентацией перед командой\n\n"
+                "Треки менторства:\n"
+                "— Backend (Java / Go / Python)\n"
+                "— Аналитика данных и ML\n"
+                "— Безопасность финансовых систем\n\n"
+                "Кого ищем:\n"
+                "Студентов 3–5 курса или выпускников до 1 года после окончания вуза. "
+                "Базовые знания программирования и желание развиваться в финансовых технологиях. "
+                "Программа бесплатная, форма участия — удалённая."
+            ),
+            "Стажёр Data Scientist": (
+                "DataVision — аналитическая платформа для ретейла и e-commerce. "
+                "Приглашаем студентов в команду ML для участия в реальных исследовательских задачах.\n\n"
+                "Чем будешь заниматься:\n"
+                "— Подготовка и исследование данных (EDA, feature engineering)\n"
+                "— Построение и валидация предиктивных моделей (churn, LTV, спрос)\n"
+                "— NLP-задачи: классификация отзывов, тональный анализ\n"
+                "— Оформление экспериментов в Jupyter, написание документации\n\n"
+                "Требования:\n"
+                "— Python: pandas, NumPy, scikit-learn — уверенный уровень\n"
+                "— Понимание основ статистики и ML-алгоритмов\n"
+                "— Желательно: опыт с PyTorch или TensorFlow\n"
+                "— Будет плюсом: участие в Kaggle-соревнованиях\n\n"
+                "Условия:\n"
+                "— Удалённая работа, гибкий график (20–30 ч/нед.)\n"
+                "— Оплата 45 000–75 000 ₽\n"
+                "— Менторство от Senior Data Scientist\n"
+                "— Доступ к нашей внутренней базе данных (сотни миллионов записей)"
+            ),
+            "Аналитик данных (Junior)": (
+                "Ищем аналитика данных в DataVision — компанию, которая помогает "
+                "крупным ретейлерам принимать решения на основе данных.\n\n"
+                "Задачи:\n"
+                "— Разработка и поддержка BI-дашбордов в Metabase / Tableau\n"
+                "— Написание сложных SQL-запросов для ad-hoc аналитики\n"
+                "— Проведение A/B-тестов: дизайн, расчёт выборки, интерпретация результатов\n"
+                "— Подготовка аналитических отчётов для product и C-level\n"
+                "— Автоматизация рутинных отчётов на Python\n\n"
+                "Требования:\n"
+                "— Уверенное знание SQL (оконные функции, CTE, джойны)\n"
+                "— Python на уровне pandas, matplotlib\n"
+                "— Базовое понимание статистики (гипотезы, p-value, доверительные интервалы)\n"
+                "— Будет плюсом: опыт с Tableau, Metabase или Redash\n\n"
+                "Предлагаем:\n"
+                "— Зарплата 100 000–150 000 ₽\n"
+                "— Гибридный формат, офис в Москва-Сити\n"
+                "— Крутые данные, реальное влияние на продукт\n"
+                "— Быстрый карьерный рост: через год можно стать Senior Analyst"
+            ),
+            "Middle ML-инженер": (
+                "DataVision переводит ML-модели из ноутбуков в production-системы с нагрузкой "
+                "от 500 предсказаний в секунду. Ищем инженера, который поможет нам это делать лучше.\n\n"
+                "Что предстоит:\n"
+                "— Разработка и поддержка ML-пайплайнов (Airflow, MLflow, DVC)\n"
+                "— Упаковка моделей в Docker, деплой в Kubernetes\n"
+                "— Мониторинг качества моделей в production (drift detection)\n"
+                "— Оптимизация инференса: ONNX, TorchScript, батчинг\n"
+                "— Работа с большими датасетами (PySpark, DuckDB)\n\n"
+                "Требования:\n"
+                "— Python от 3 лет, уверенное знание PyTorch или TensorFlow\n"
+                "— Опыт с Docker, CI/CD для ML-проектов\n"
+                "— Понимание распределённых вычислений\n"
+                "— Коммерческий опыт в ML от 2 лет\n\n"
+                "Условия:\n"
+                "— Зарплата 200 000–280 000 ₽\n"
+                "— Гибридный формат, офис в Москва-Сити\n"
+                "— Современный ML-стек, интересные задачи без легаси\n"
+                "— ДМС, бюджет на обучение и конференции"
+            ),
+            "Карьерный день DataVision": (
+                "DataVision открывает двери офиса для всех, кто хочет узнать, "
+                "как устроена аналитика данных в одной из ведущих продуктовых компаний России.\n\n"
+                "Программа дня:\n"
+                "— 10:00 — Экскурсия по офису, знакомство с командами\n"
+                "— 11:00 — Доклад «Как мы строим ML в production» (CTO DataVision)\n"
+                "— 12:30 — Интерактивная панель: вопросы аналитикам и Data Scientists\n"
+                "— 14:00 — Нетворкинг-ланч с командой\n"
+                "— 15:00 — Мини-кейс: решаем задачу вместе с нашими специалистами\n"
+                "— 16:30 — Индивидуальные встречи с HR для желающих\n\n"
+                "Для кого:\n"
+                "Студенты и выпускники, интересующиеся Data Science и аналитикой данных. "
+                "Опыт не нужен — нужно любопытство и желание учиться.\n\n"
+                "Лучшие участники получат офферы на оплачиваемую стажировку. "
+                "Регистрация обязательна, места ограничены (30 человек)."
+            ),
+            "DevOps-инженер (Junior)": (
+                "CloudWave — облачная платформа для SaaS-компаний. "
+                "Управляем инфраструктурой для 200+ клиентов на AWS.\n\n"
+                "Задачи:\n"
+                "— Поддержка и развитие облачной инфраструктуры на AWS (EKS, RDS, S3, Lambda)\n"
+                "— Написание Terraform-модулей для provisioning окружений\n"
+                "— Настройка и поддержка GitLab CI пайплайнов\n"
+                "— Работа с Kubernetes: написание манифестов, Helm-чарты, troubleshooting\n"
+                "— Участие в дежурствах (on-call), разбор инцидентов\n\n"
+                "Требования:\n"
+                "— Хорошее знание Linux (bash, systemd, сети)\n"
+                "— Понимание Docker и основ Kubernetes\n"
+                "— Базовое знание любого облачного провайдера\n"
+                "— Открыты к кандидатам без коммерческого опыта при наличии учебных проектов\n\n"
+                "Предлагаем:\n"
+                "— Полностью удалённый формат\n"
+                "— Зарплата 110 000–160 000 ₽\n"
+                "— Онбординг 1 месяц с бадди\n"
+                "— Оплата AWS и HashiCorp сертификаций"
+            ),
+            "Стажёр SRE / Platform Engineer": (
+                "Хочешь разобраться, как работают сервисы в production? "
+                "CloudWave открывает стажировку в команде надёжности.\n\n"
+                "Чем займёшься:\n"
+                "— Настройка мониторинга: Prometheus, Grafana, AlertManager\n"
+                "— Написание runbook'ов и документации по инцидентам\n"
+                "— Помощь в проведении нагрузочного тестирования (k6, Locust)\n"
+                "— Разбор post-mortem'ов вместе с командой\n"
+                "— Участие в автоматизации рутины на Python и bash\n\n"
+                "Кого ищем:\n"
+                "— Студент или выпускник с интересом к надёжности и DevOps\n"
+                "— Базовые знания Linux\n"
+                "— Готовность разбираться в незнакомых системах\n\n"
+                "Условия:\n"
+                "— Оплата 50 000–70 000 ₽\n"
+                "— Гибридный формат\n"
+                "— Наставник — опытный SRE с 8 годами опыта\n"
+                "— Реальные задачи с первого спринта, не «принеси кофе»"
+            ),
+            "Митап: DevOps в 2025 году": (
+                "CloudWave проводит открытый технический митап для DevOps-инженеров, "
+                "SRE и всех, кто интересуется современной инфраструктурой.\n\n"
+                "Темы докладов:\n"
+                "— «Platform Engineering: почему DevOps эволюционирует» (45 мин)\n"
+                "— «GitOps в 2025: ArgoCD vs Flux, реальный опыт» (30 мин)\n"
+                "— «eBPF без магии: практические кейсы наблюдаемости» (30 мин)\n"
+                "— «OpenTelemetry: от метрик к traces» (20 мин)\n\n"
+                "Формат:\n"
+                "— Открытое посещение, регистрация не нужна\n"
+                "— Нетворкинг-пауза с кофе и закусками\n"
+                "— После докладов — QA-сессия со спикерами\n"
+                "— Мерч от CloudWave для всех участников\n\n"
+                "Место: коворкинг «Точка», Арбат 1, зал «Облако» (3-й этаж). "
+                "Начало в 19:00, вход свободный."
+            ),
+            "Junior Android-разработчик": (
+                "MobileCraft — студия мобильных приложений с аудиторией более 1M активных пользователей. "
+                "Ищем разработчика в команду Android-приложения для фитнес-трекинга.\n\n"
+                "Задачи:\n"
+                "— Разработка новых экранов и фич на Jetpack Compose\n"
+                "— Интеграция REST API через Retrofit + OkHttp\n"
+                "— Работа с локальной базой данных Room\n"
+                "— Написание unit-тестов (JUnit, Mockito)\n"
+                "— Участие в code review и sprint planning\n\n"
+                "Требования:\n"
+                "— Знание Kotlin, понимание корутин и Flow\n"
+                "— Опыт с Jetpack (Compose, Navigation, ViewModel, LiveData)\n"
+                "— Понимание архитектурных паттернов (MVVM, Clean Architecture)\n"
+                "— Приветствуется: pet-проекты на GitHub, опубликованные приложения\n\n"
+                "Условия:\n"
+                "— Зарплата 100 000–140 000 ₽\n"
+                "— Гибридный формат, офис в Екатеринбурге\n"
+                "— Небольшая команда (7 человек), быстрые решения без бюрократии\n"
+                "— Корпоративный абонемент в спортзал"
+            ),
+            "Стажёр iOS-разработчик": (
+                "MobileCraft приглашает стажёров в команду iOS-разработки. "
+                "Работаем над приложением с 400K+ установок в App Store.\n\n"
+                "Что предстоит делать:\n"
+                "— Доработка и улучшение существующих экранов на SwiftUI\n"
+                "— Написание юнит-тестов (XCTest) для бизнес-логики\n"
+                "— Участие в code review: ревьюим код друг друга в команде\n"
+                "— Работа с Combine для реактивных потоков данных\n"
+                "— Исправление багов по репортам из Crashlytics\n\n"
+                "Кого ищем:\n"
+                "— Знание Swift на уровне основ, понимание типов и опциональных значений\n"
+                "— Базовое знакомство с UIKit или SwiftUI\n"
+                "— Желание учиться и задавать вопросы\n\n"
+                "Условия:\n"
+                "— Полностью удалённо, гибкий график\n"
+                "— Оплата 45 000–70 000 ₽\n"
+                "— Менторство 1:1 с iOS Lead\n"
+                "— Возможность конвертации в full-time после стажировки"
+            ),
+            "Unity-разработчик (стажировка)": (
+                "MobileCraft разрабатывает казуальные мобильные игры. "
+                "Наш хит в жанре puzzle набрал 2M+ загрузок. "
+                "Ищем стажёра в команду геймдева.\n\n"
+                "Задачи:\n"
+                "— Разработка новых игровых механик на Unity + C#\n"
+                "— Профилирование и оптимизация производительности на мобильных устройствах\n"
+                "— Работа с Addressables для динамической подгрузки контента\n"
+                "— Интеграция Firebase (аналитика, A/B-тесты, remote config)\n"
+                "— Участие в разработке UI-экранов (Unity UI / UI Toolkit)\n\n"
+                "Требования:\n"
+                "— Знание C# и основ объектно-ориентированного программирования\n"
+                "— Базовое понимание Unity (сцены, компоненты, префабы)\n"
+                "— Будет плюсом: собственные игровые проекты или джемы\n\n"
+                "Условия:\n"
+                "— Оплата 40 000–65 000 ₽\n"
+                "— Гибридный формат, офис в Екатеринбурге\n"
+                "— Доступ к Unity Pro лицензии\n"
+                "— Участие в внутренних геймджемах компании"
+            ),
+            "Менторство по мобильной разработке": (
+                "MobileCraft запускает двухмесячную менторскую программу для тех, "
+                "кто хочет стартовать карьеру в мобильной разработке.\n\n"
+                "Как устроена программа:\n"
+                "— Выбираешь трек: Android (Kotlin + Jetpack) или iOS (Swift + SwiftUI)\n"
+                "— 3 встречи в неделю с ментором (1 час каждая)\n"
+                "— Практические задания, приближённые к реальным рабочим задачам\n"
+                "— Code review твоих решений от опытного разработчика\n"
+                "— Помощь с оформлением портфолио и резюме\n"
+                "— Финальный мини-проект с публикацией в магазин\n\n"
+                "Для кого:\n"
+                "— Начинающие разработчики с базовыми знаниями языка (Swift или Kotlin)\n"
+                "— Студенты, желающие получить первый реальный опыт\n"
+                "— Те, кто переходит в мобильную разработку из другой области\n\n"
+                "Программа удалённая и бесплатная. "
+                "Количество мест ограничено: 5 человек на каждый трек. "
+                "Лучшие участники получат приглашение на собеседование в MobileCraft."
+            ),
+        }
+        for title, desc in _demo_descriptions.items():
+            opp = db.scalar(select(Opportunity).where(Opportunity.title == title))
+            if opp and opp.description != desc:
+                opp.description = desc
+        db.commit()
+
+        # ── Проверяем, нужно ли создавать демо-данные ─────────────────────────
+        from sqlalchemy import func
+        num_employers = db.scalar(select(func.count()).select_from(EmployerProfile))
+        if num_employers and num_employers >= 3:
             return
 
-        db.add(
+        # ── Теги по slug ──────────────────────────────────────────────────────
+        def tag(slug: str) -> Tag | None:
+            return db.scalar(select(Tag).where(Tag.slug == slug))
+
+        # ── Работодатели ──────────────────────────────────────────────────────
+        employers_data = [
+            {
+                "email": "hr@techcorp.ru",
+                "display_name": "TechCorp HR",
+                "company_name": "TechCorp",
+                "industry": "IT / Разработка ПО",
+                "website_url": "https://techcorp.example.com",
+            },
+            {
+                "email": "jobs@fintech-lab.ru",
+                "display_name": "FinTech Lab HR",
+                "company_name": "FinTech Lab",
+                "industry": "Финансовые технологии",
+                "website_url": "https://fintechlab.example.com",
+            },
+            {
+                "email": "career@datavision.ru",
+                "display_name": "DataVision HR",
+                "company_name": "DataVision",
+                "industry": "Аналитика данных / AI",
+                "website_url": "https://datavision.example.com",
+            },
+            {
+                "email": "hr@cloudwave.ru",
+                "display_name": "CloudWave HR",
+                "company_name": "CloudWave",
+                "industry": "Облачные сервисы / DevOps",
+                "website_url": "https://cloudwave.example.com",
+            },
+            {
+                "email": "jobs@mobilecraft.ru",
+                "display_name": "MobileCraft HR",
+                "company_name": "MobileCraft",
+                "industry": "Мобильная разработка",
+                "website_url": "https://mobilecraft.example.com",
+            },
+        ]
+
+        employer_profiles: list[EmployerProfile] = []
+        for ed in employers_data:
+            existing = db.scalar(select(User).where(User.email == ed["email"]))
+            if existing:
+                ep = db.scalar(select(EmployerProfile).where(EmployerProfile.user_id == existing.id))
+            else:
+                u = User(
+                    email=ed["email"],
+                    display_name=ed["display_name"],
+                    hashed_password=hash_password("demo1234"),
+                    role=UserRole.employer,
+                    is_active=True,
+                )
+                db.add(u)
+                db.flush()
+                ep = EmployerProfile(
+                    user_id=u.id,
+                    company_name=ed["company_name"],
+                    industry=ed.get("industry"),
+                    website_url=ed.get("website_url"),
+                    verification_status="approved",
+                )
+                db.add(ep)
+                db.flush()
+            if ep:
+                employer_profiles.append(ep)
+        db.commit()
+
+        tc, fl, dv, cw, mc = employer_profiles[0], employer_profiles[1], employer_profiles[2], employer_profiles[3], employer_profiles[4]
+
+        # ── Возможности ───────────────────────────────────────────────────────
+        now = datetime.now(UTC)
+
+        opps_data = [
+            # TechCorp
             Opportunity(
-                employer_id=employer.id,
-                title="Junior Python стажёр",
-                description="Стажировка для студентов: Python, SQL, пет‑проекты приветствуются.",
+                employer_id=tc.id,
+                title="Python Backend стажёр",
+                description=(
+                    "Ищем студентов 3–4 курса для стажировки в команде бэкенда TechCorp.\n\n"
+                    "Чем будешь заниматься:\n"
+                    "— Разработка REST API на FastAPI для внутренних сервисов\n"
+                    "— Работа с базой данных PostgreSQL: миграции, оптимизация запросов\n"
+                    "— Написание юнит- и интеграционных тестов (pytest)\n"
+                    "— Код-ревью с опытными коллегами\n\n"
+                    "Требования:\n"
+                    "— Знание Python на уровне написания классов и работы с библиотеками\n"
+                    "— Базовое понимание SQL и реляционных баз\n"
+                    "— Умение работать с Git\n\n"
+                    "Что предлагаем:\n"
+                    "— Менторство от Senior-разработчика с ежедневными синками\n"
+                    "— Гибридный формат: 2 дня в офисе на Льва Толстого, остальное удалённо\n"
+                    "— Оплата 50 000–80 000 ₽ в месяц\n"
+                    "— Возможность перехода в штат по итогам стажировки"
+                ),
+                opportunity_type=OpportunityType.internship,
+                work_format=WorkFormat.hybrid,
+                status=OpportunityStatus.active,
+                city="Москва",
+                address="ул. Льва Толстого, 16",
+                lat=55.733974,
+                lng=37.587093,
+                salary_from=50000,
+                salary_to=80000,
+                published_at=now - timedelta(days=3),
+            ),
+            Opportunity(
+                employer_id=tc.id,
+                title="Junior Frontend разработчик",
+                description=(
+                    "Присоединяйся к продуктовой команде TechCorp, которая разрабатывает "
+                    "внутренние SaaS-платформы для автоматизации бизнес-процессов.\n\n"
+                    "Задачи:\n"
+                    "— Разработка новых UI-компонентов на React + TypeScript\n"
+                    "— Интеграция с backend API (REST, частично GraphQL)\n"
+                    "— Участие в планировании спринтов и груминге задач\n"
+                    "— Покрытие компонентов unit-тестами (Vitest)\n\n"
+                    "Требования:\n"
+                    "— Уверенное знание React и TypeScript\n"
+                    "— Понимание HTML/CSS, адаптивной вёрстки\n"
+                    "— Опыт работы с Git (pull requests, code review)\n"
+                    "— Будет плюсом: Vite, TanStack Query, Storybook\n\n"
+                    "Условия:\n"
+                    "— Полностью удалённый формат, гибкий рабочий день\n"
+                    "— Зарплата 90 000–130 000 ₽\n"
+                    "— Обучение за счёт компании, доступ к курсам и конференциям\n"
+                    "— Дружная команда из 8 фронтенд-разработчиков"
+                ),
+                opportunity_type=OpportunityType.vacancy,
+                work_format=WorkFormat.remote,
+                status=OpportunityStatus.active,
+                city="Москва",
+                lat=55.751244,
+                lng=37.618423,
+                salary_from=90000,
+                salary_to=130000,
+                published_at=now - timedelta(days=7),
+            ),
+            Opportunity(
+                employer_id=tc.id,
+                title="Middle Python разработчик",
+                description=(
+                    "Ищем опытного Python-разработчика в команду платформы данных TechCorp. "
+                    "Наша платформа обрабатывает более 10 млн запросов в сутки.\n\n"
+                    "Что предстоит делать:\n"
+                    "— Проектировать и разрабатывать микросервисы на FastAPI и asyncio\n"
+                    "— Оптимизировать запросы к PostgreSQL, проектировать схемы БД\n"
+                    "— Работать с Redis (кэширование, очереди), Docker, Kubernetes\n"
+                    "— Участвовать в архитектурных обсуждениях и code review\n"
+                    "— Следить за производительностью через Grafana и Sentry\n\n"
+                    "Требования:\n"
+                    "— Коммерческий опыт от 2 лет на Python\n"
+                    "— Уверенное знание asyncio и работы с SQL/NoSQL\n"
+                    "— Опыт с Docker и базовое понимание Kubernetes\n"
+                    "— Понимание принципов SOLID, REST, DDD\n\n"
+                    "Мы предлагаем:\n"
+                    "— Зарплату 180 000–250 000 ₽\n"
+                    "— Гибридный формат (2–3 дня в неделю в офисе)\n"
+                    "— ДМС, оплату конференций (Highload++, PyCon)\n"
+                    "— Интересные технические задачи без корпоративной бюрократии"
+                ),
+                opportunity_type=OpportunityType.vacancy,
+                work_format=WorkFormat.hybrid,
+                status=OpportunityStatus.active,
+                city="Москва",
+                address="ул. Льва Толстого, 16",
+                lat=55.733974,
+                lng=37.587093,
+                salary_from=180000,
+                salary_to=250000,
+                published_at=now - timedelta(days=2),
+            ),
+            Opportunity(
+                employer_id=tc.id,
+                title="Хакатон TechCorp 2025",
+                description=(
+                    "TechCorp проводит ежегодный командный хакатон в Технопарке «Сколково». "
+                    "В этом году тема — практическое применение генеративного ИИ.\n\n"
+                    "Формат:\n"
+                    "— 48 часов нон-стоп разработки командами по 3–5 человек\n"
+                    "— Задача: прототип AI-сервиса, решающего реальную бизнес-проблему\n"
+                    "— Менторская поддержка от инженеров TechCorp на протяжении всего хакатона\n"
+                    "— Финальная презентация жюри из топ-менеджмента и технических экспертов\n\n"
+                    "Призовой фонд:\n"
+                    "— 1 место — 150 000 ₽\n"
+                    "— 2 место — 100 000 ₽\n"
+                    "— 3 место — 50 000 ₽\n"
+                    "— Специальный приз зрительских симпатий — 20 000 ₽\n\n"
+                    "Для кого:\n"
+                    "Студенты и молодые специалисты до 3 лет опыта. Лучшие команды получат "
+                    "офферы на стажировку или в штат. Питание и проживание организованы."
+                ),
+                opportunity_type=OpportunityType.event,
+                work_format=WorkFormat.office,
+                status=OpportunityStatus.active,
+                city="Москва",
+                address="Технопарк «Сколково»",
+                lat=55.695286,
+                lng=37.357755,
+                event_date=now + timedelta(days=20),
+                published_at=now - timedelta(days=1),
+            ),
+            Opportunity(
+                employer_id=tc.id,
+                title="DevOps-инженер (стажировка)",
+                description=(
+                    "Стажировка в команде инфраструктуры TechCorp — идеальный старт для тех, "
+                    "кто хочет войти в профессию DevOps/SRE.\n\n"
+                    "Что будешь делать:\n"
+                    "— Настраивать и поддерживать CI/CD пайплайны на GitLab CI\n"
+                    "— Работать с Docker и Kubernetes в боевой среде\n"
+                    "— Настраивать мониторинг и алертинг (Prometheus, Grafana, Alertmanager)\n"
+                    "— Писать Infrastructure as Code с помощью Terraform и Helm\n"
+                    "— Разбирать инциденты вместе с Senior SRE\n\n"
+                    "Требования:\n"
+                    "— Базовые знания Linux (командная строка, bash-скрипты)\n"
+                    "— Понимание Docker на уровне написания Dockerfile\n"
+                    "— Интерес к автоматизации и надёжности систем\n\n"
+                    "Условия:\n"
+                    "— Оплата 55 000–85 000 ₽\n"
+                    "— Гибридный формат, офис на Льва Толстого\n"
+                    "— Сильный ментор, задачи из первого спринта"
+                ),
+                opportunity_type=OpportunityType.internship,
+                work_format=WorkFormat.hybrid,
+                status=OpportunityStatus.active,
+                city="Москва",
+                address="ул. Льва Толстого, 16",
+                lat=55.733974,
+                lng=37.587093,
+                salary_from=55000,
+                salary_to=85000,
+                published_at=now - timedelta(days=5),
+            ),
+            # FinTech Lab
+            Opportunity(
+                employer_id=fl.id,
+                title="Java-разработчик (стажировка)",
+                description=(
+                    "FinTech Lab — финтех-компания с 7 млн активных пользователей. "
+                    "Приглашаем студентов и выпускников в команду платёжных систем.\n\n"
+                    "Задачи стажёра:\n"
+                    "— Разработка новых функций в микросервисах на Java 21 + Spring Boot\n"
+                    "— Работа с Kafka: написание продюсеров и консьюмеров\n"
+                    "— Написание интеграционных тестов с Testcontainers\n"
+                    "— Участие в код-ревью и ретроспективах команды\n\n"
+                    "Требования:\n"
+                    "— Знание Java на уровне ООП, коллекций, исключений\n"
+                    "— Базовое понимание Spring (IoC, Spring Data)\n"
+                    "— Знание SQL\n\n"
+                    "Что получишь:\n"
+                    "— Работа над реальными задачами в продуктовой команде с первого дня\n"
+                    "— Оплата 60 000–90 000 ₽\n"
+                    "— Офис в центре Петербурга, Невский 30\n"
+                    "— Возможность получить оффер после стажировки"
+                ),
+                opportunity_type=OpportunityType.internship,
+                work_format=WorkFormat.office,
+                status=OpportunityStatus.active,
+                city="Санкт-Петербург",
+                address="Невский проспект, 30",
+                lat=59.934280,
+                lng=30.335099,
+                salary_from=60000,
+                salary_to=90000,
+                published_at=now - timedelta(days=5),
+            ),
+            Opportunity(
+                employer_id=fl.id,
+                title="Middle Go-разработчик",
+                description=(
+                    "Ищем Go-разработчика в команду процессинга платежей FinTech Lab. "
+                    "Наши сервисы обрабатывают транзакции на сумму более 2 млрд ₽ в месяц.\n\n"
+                    "Что будешь делать:\n"
+                    "— Разрабатывать высоконагруженные микросервисы на Go\n"
+                    "— Проектировать gRPC-интерфейсы между сервисами\n"
+                    "— Оптимизировать запросы PostgreSQL, работать с Redis\n"
+                    "— Деплоить сервисы в Kubernetes, разбирать инциденты\n"
+                    "— Участвовать в архитектурных ревью новых фич\n\n"
+                    "Требования:\n"
+                    "— Коммерческий опыт на Go от 2 лет\n"
+                    "— Понимание конкурентности (goroutines, channels, sync)\n"
+                    "— Опыт с PostgreSQL, Redis, gRPC\n"
+                    "— Будет плюсом: опыт в финтехе, знание PCI DSS\n\n"
+                    "Условия:\n"
+                    "— Зарплата 180 000–250 000 ₽\n"
+                    "— Команда 6 человек, agile (2-недельные спринты)\n"
+                    "— Гибридный формат, офис в Петербурге\n"
+                    "— ДМС, квартальные бонусы"
+                ),
+                opportunity_type=OpportunityType.vacancy,
+                work_format=WorkFormat.hybrid,
+                status=OpportunityStatus.active,
+                city="Санкт-Петербург",
+                lat=59.934280,
+                lng=30.335099,
+                salary_from=180000,
+                salary_to=250000,
+                published_at=now - timedelta(days=10),
+            ),
+            Opportunity(
+                employer_id=fl.id,
+                title="Junior C# разработчик",
+                description=(
+                    "FinTech Lab ищет C#-разработчика в команду внутренних систем. "
+                    "Занимаемся автоматизацией операционных процессов банка.\n\n"
+                    "Задачи:\n"
+                    "— Разработка и поддержка backend-сервисов на C# и .NET 8\n"
+                    "— Работа с MSSQL: хранимые процедуры, оптимизация запросов\n"
+                    "— Интеграция через RabbitMQ с внешними системами\n"
+                    "— Написание unit-тестов (xUnit), участие в code review\n\n"
+                    "Требования:\n"
+                    "— Знание C# и .NET, понимание async/await\n"
+                    "— Опыт с Entity Framework или Dapper\n"
+                    "— Базовое знание SQL\n"
+                    "— Будет плюсом: опыт с очередями сообщений\n\n"
+                    "Предлагаем:\n"
+                    "— Зарплата 100 000–140 000 ₽\n"
+                    "— Полное обучение: код-стандарты, архитектура проекта, онбординг 2 недели\n"
+                    "— Офис на Невском, 30 — в самом центре Петербурга\n"
+                    "— Стабильная компания, белая зарплата, соцпакет"
+                ),
+                opportunity_type=OpportunityType.vacancy,
+                work_format=WorkFormat.office,
+                status=OpportunityStatus.active,
+                city="Санкт-Петербург",
+                address="Невский проспект, 30",
+                lat=59.934280,
+                lng=30.335099,
+                salary_from=100000,
+                salary_to=140000,
+                published_at=now - timedelta(days=4),
+            ),
+            Opportunity(
+                employer_id=fl.id,
+                title="Менторская программа по финтеху",
+                description=(
+                    "FinTech Lab запускает трёхмесячную менторскую программу для студентов "
+                    "последних курсов и недавних выпускников, которые хотят строить карьеру в финтехе.\n\n"
+                    "Как устроена программа:\n"
+                    "— Каждому участнику назначается личный ментор — Senior-инженер FinTech Lab\n"
+                    "— 2 встречи в неделю по 1 часу: разбор кода, карьерные советы, Q&A\n"
+                    "— Практические задания на реальных задачах компании (в тестовой среде)\n"
+                    "— Финальный проект с презентацией перед командой\n\n"
+                    "Треки менторства:\n"
+                    "— Backend (Java / Go / Python)\n"
+                    "— Аналитика данных и ML\n"
+                    "— Безопасность финансовых систем\n\n"
+                    "Кого ищем:\n"
+                    "Студентов 3–5 курса или выпускников до 1 года после окончания вуза. "
+                    "Базовые знания программирования и желание развиваться в финансовых технологиях. "
+                    "Программа бесплатная, форма участия — удалённая."
+                ),
+                opportunity_type=OpportunityType.mentoring,
+                work_format=WorkFormat.remote,
+                status=OpportunityStatus.active,
+                city="Санкт-Петербург",
+                lat=59.934280,
+                lng=30.335099,
+                published_at=now - timedelta(days=2),
+            ),
+            # DataVision
+            Opportunity(
+                employer_id=dv.id,
+                title="Стажёр Data Scientist",
+                description=(
+                    "DataVision — аналитическая платформа для ретейла и e-commerce. "
+                    "Приглашаем студентов в команду ML для участия в реальных исследовательских задачах.\n\n"
+                    "Чем будешь заниматься:\n"
+                    "— Подготовка и исследование данных (EDA, feature engineering)\n"
+                    "— Построение и валидация предиктивных моделей (churn, LTV, спрос)\n"
+                    "— NLP-задачи: классификация отзывов, тональный анализ\n"
+                    "— Оформление экспериментов в Jupyter, написание документации\n\n"
+                    "Требования:\n"
+                    "— Python: pandas, NumPy, scikit-learn — уверенный уровень\n"
+                    "— Понимание основ статистики и ML-алгоритмов\n"
+                    "— Желательно: опыт с PyTorch или TensorFlow\n"
+                    "— Будет плюсом: участие в Kaggle-соревнованиях\n\n"
+                    "Условия:\n"
+                    "— Удалённая работа, гибкий график (20–30 ч/нед.)\n"
+                    "— Оплата 45 000–75 000 ₽\n"
+                    "— Менторство от Senior Data Scientist\n"
+                    "— Доступ к нашей внутренней базе данных (сотни миллионов записей)"
+                ),
                 opportunity_type=OpportunityType.internship,
                 work_format=WorkFormat.remote,
                 status=OpportunityStatus.active,
                 city="Москва",
                 lat=55.751244,
                 lng=37.618423,
-                salary_from=40000,
-                salary_to=80000,
-            )
-        )
-        db.add(
+                salary_from=45000,
+                salary_to=75000,
+                published_at=now - timedelta(days=4),
+            ),
             Opportunity(
-                employer_id=employer.id,
-                title="Хакатон от компании",
-                description="Очное мероприятие для студентов: командная разработка, призы и собеседования.",
+                employer_id=dv.id,
+                title="Аналитик данных (Junior)",
+                description=(
+                    "Ищем аналитика данных в DataVision — компанию, которая помогает "
+                    "крупным ретейлерам принимать решения на основе данных.\n\n"
+                    "Задачи:\n"
+                    "— Разработка и поддержка BI-дашбордов в Metabase / Tableau\n"
+                    "— Написание сложных SQL-запросов для ad-hoc аналитики\n"
+                    "— Проведение A/B-тестов: дизайн, расчёт выборки, интерпретация результатов\n"
+                    "— Подготовка аналитических отчётов для product и C-level\n"
+                    "— Автоматизация рутинных отчётов на Python\n\n"
+                    "Требования:\n"
+                    "— Уверенное знание SQL (оконные функции, CTE, джойны)\n"
+                    "— Python на уровне pandas, matplotlib\n"
+                    "— Базовое понимание статистики (гипотезы, p-value, доверительные интервалы)\n"
+                    "— Будет плюсом: опыт с Tableau, Metabase или Redash\n\n"
+                    "Предлагаем:\n"
+                    "— Зарплата 100 000–150 000 ₽\n"
+                    "— Гибридный формат, офис в Москва-Сити\n"
+                    "— Крутые данные, реальное влияние на продукт\n"
+                    "— Быстрый карьерный рост: через год можно стать Senior Analyst"
+                ),
+                opportunity_type=OpportunityType.vacancy,
+                work_format=WorkFormat.hybrid,
+                status=OpportunityStatus.active,
+                city="Москва",
+                address="Пресненская набережная, 10",
+                lat=55.749553,
+                lng=37.539724,
+                salary_from=100000,
+                salary_to=150000,
+                published_at=now - timedelta(days=6),
+            ),
+            Opportunity(
+                employer_id=dv.id,
+                title="Middle ML-инженер",
+                description=(
+                    "DataVision переводит ML-модели из ноутбуков в production-системы с нагрузкой "
+                    "от 500 предсказаний в секунду. Ищем инженера, который поможет нам это делать лучше.\n\n"
+                    "Что предстоит:\n"
+                    "— Разработка и поддержка ML-пайплайнов (Airflow, MLflow, DVC)\n"
+                    "— Упаковка моделей в Docker, деплой в Kubernetes\n"
+                    "— Мониторинг качества моделей в production (drift detection)\n"
+                    "— Оптимизация инференса: ONNX, TorchScript, батчинг\n"
+                    "— Работа с большими датасетами (PySpark, DuckDB)\n\n"
+                    "Требования:\n"
+                    "— Python от 3 лет, уверенное знание PyTorch или TensorFlow\n"
+                    "— Опыт с Docker, CI/CD для ML-проектов\n"
+                    "— Понимание распределённых вычислений\n"
+                    "— Коммерческий опыт в ML от 2 лет\n\n"
+                    "Условия:\n"
+                    "— Зарплата 200 000–280 000 ₽\n"
+                    "— Гибридный формат, офис в Москва-Сити\n"
+                    "— Современный ML-стек, интересные задачи без легаси\n"
+                    "— ДМС, бюджет на обучение и конференции"
+                ),
+                opportunity_type=OpportunityType.vacancy,
+                work_format=WorkFormat.hybrid,
+                status=OpportunityStatus.active,
+                city="Москва",
+                address="Пресненская набережная, 10",
+                lat=55.749553,
+                lng=37.539724,
+                salary_from=200000,
+                salary_to=280000,
+                published_at=now - timedelta(days=3),
+            ),
+            Opportunity(
+                employer_id=dv.id,
+                title="Карьерный день DataVision",
+                description=(
+                    "DataVision открывает двери офиса для всех, кто хочет узнать, "
+                    "как устроена аналитика данных в одной из ведущих продуктовых компаний России.\n\n"
+                    "Программа дня:\n"
+                    "— 10:00 — Экскурсия по офису, знакомство с командами\n"
+                    "— 11:00 — Доклад «Как мы строим ML в production» (CTO DataVision)\n"
+                    "— 12:30 — Интерактивная панель: вопросы аналитикам и Data Scientists\n"
+                    "— 14:00 — Нетворкинг-ланч с командой\n"
+                    "— 15:00 — Мини-кейс: решаем задачу вместе с нашими специалистами\n"
+                    "— 16:30 — Индивидуальные встречи с HR для желающих\n\n"
+                    "Для кого:\n"
+                    "Студенты и выпускники, интересующиеся Data Science и аналитикой данных. "
+                    "Опыт не нужен — нужно любопытство и желание учиться.\n\n"
+                    "Лучшие участники получат офферы на оплачиваемую стажировку. "
+                    "Регистрация обязательна, места ограничены (30 человек)."
+                ),
                 opportunity_type=OpportunityType.event,
                 work_format=WorkFormat.office,
                 status=OpportunityStatus.active,
-                city="Санкт‑Петербург",
-                lat=59.93428,
-                lng=30.335099,
-            )
-        )
+                city="Москва",
+                address="Пресненская набережная, 10",
+                lat=55.749553,
+                lng=37.539724,
+                event_date=now + timedelta(days=12),
+                published_at=now - timedelta(days=1),
+            ),
+            # CloudWave
+            Opportunity(
+                employer_id=cw.id,
+                title="DevOps-инженер (Junior)",
+                description=(
+                    "CloudWave — облачная платформа для SaaS-компаний. "
+                    "Управляем инфраструктурой для 200+ клиентов на AWS.\n\n"
+                    "Задачи:\n"
+                    "— Поддержка и развитие облачной инфраструктуры на AWS (EKS, RDS, S3, Lambda)\n"
+                    "— Написание Terraform-модулей для provisioning окружений\n"
+                    "— Настройка и поддержка GitLab CI пайплайнов\n"
+                    "— Работа с Kubernetes: написание манифестов, Helm-чарты, troubleshooting\n"
+                    "— Участие в дежурствах (on-call), разбор инцидентов\n\n"
+                    "Требования:\n"
+                    "— Хорошее знание Linux (bash, systemd, сети)\n"
+                    "— Понимание Docker и основ Kubernetes\n"
+                    "— Базовое знание любого облачного провайдера\n"
+                    "— Открыты к кандидатам без коммерческого опыта при наличии учебных проектов\n\n"
+                    "Предлагаем:\n"
+                    "— Полностью удалённый формат\n"
+                    "— Зарплата 110 000–160 000 ₽\n"
+                    "— Онбординг 1 месяц с бадди\n"
+                    "— Оплата AWS и HashiCorp сертификаций"
+                ),
+                opportunity_type=OpportunityType.vacancy,
+                work_format=WorkFormat.remote,
+                status=OpportunityStatus.active,
+                city="Москва",
+                lat=55.751244,
+                lng=37.618423,
+                salary_from=110000,
+                salary_to=160000,
+                published_at=now - timedelta(days=3),
+            ),
+            Opportunity(
+                employer_id=cw.id,
+                title="Стажёр SRE / Platform Engineer",
+                description=(
+                    "Хочешь разобраться, как работают сервисы в production? "
+                    "CloudWave открывает стажировку в команде надёжности.\n\n"
+                    "Чем займёшься:\n"
+                    "— Настройка мониторинга: Prometheus, Grafana, AlertManager\n"
+                    "— Написание runbook'ов и документации по инцидентам\n"
+                    "— Помощь в проведении нагрузочного тестирования (k6, Locust)\n"
+                    "— Разбор post-mortem'ов вместе с командой\n"
+                    "— Участие в автоматизации рутины на Python и bash\n\n"
+                    "Кого ищем:\n"
+                    "— Студент или выпускник с интересом к надёжности и DevOps\n"
+                    "— Базовые знания Linux\n"
+                    "— Готовность разбираться в незнакомых системах\n\n"
+                    "Условия:\n"
+                    "— Оплата 50 000–70 000 ₽\n"
+                    "— Гибридный формат\n"
+                    "— Наставник — опытный SRE с 8 годами опыта\n"
+                    "— Реальные задачи с первого спринта, не «принеси кофе»"
+                ),
+                opportunity_type=OpportunityType.internship,
+                work_format=WorkFormat.hybrid,
+                status=OpportunityStatus.active,
+                city="Москва",
+                lat=55.751244,
+                lng=37.618423,
+                salary_from=50000,
+                salary_to=70000,
+                published_at=now - timedelta(days=6),
+            ),
+            Opportunity(
+                employer_id=cw.id,
+                title="Митап: DevOps в 2025 году",
+                description=(
+                    "CloudWave проводит открытый технический митап для DevOps-инженеров, "
+                    "SRE и всех, кто интересуется современной инфраструктурой.\n\n"
+                    "Темы докладов:\n"
+                    "— «Platform Engineering: почему DevOps эволюционирует» (45 мин)\n"
+                    "— «GitOps в 2025: ArgoCD vs Flux, реальный опыт» (30 мин)\n"
+                    "— «eBPF без магии: практические кейсы наблюдаемости» (30 мин)\n"
+                    "— «OpenTelemetry: от метрик к traces» (20 мин)\n\n"
+                    "Формат:\n"
+                    "— Открытое посещение, регистрация не нужна\n"
+                    "— Нетворкинг-пауза с кофе и закусками\n"
+                    "— После докладов — QA-сессия со спикерами\n"
+                    "— Мерч от CloudWave для всех участников\n\n"
+                    "Место: коворкинг «Точка», Арбат 1, зал «Облако» (3-й этаж). "
+                    "Начало в 19:00, вход свободный."
+                ),
+                opportunity_type=OpportunityType.event,
+                work_format=WorkFormat.office,
+                status=OpportunityStatus.active,
+                city="Москва",
+                address="Коворкинг «Точка», Арбат 1",
+                lat=55.749553,
+                lng=37.592396,
+                event_date=now + timedelta(days=8),
+                published_at=now - timedelta(days=1),
+            ),
+            # MobileCraft
+            Opportunity(
+                employer_id=mc.id,
+                title="Junior Android-разработчик",
+                description=(
+                    "MobileCraft — студия мобильных приложений с аудиторией более 1M активных пользователей. "
+                    "Ищем разработчика в команду Android-приложения для фитнес-трекинга.\n\n"
+                    "Задачи:\n"
+                    "— Разработка новых экранов и фич на Jetpack Compose\n"
+                    "— Интеграция REST API через Retrofit + OkHttp\n"
+                    "— Работа с локальной базой данных Room\n"
+                    "— Написание unit-тестов (JUnit, Mockito)\n"
+                    "— Участие в code review и sprint planning\n\n"
+                    "Требования:\n"
+                    "— Знание Kotlin, понимание корутин и Flow\n"
+                    "— Опыт с Jetpack (Compose, Navigation, ViewModel, LiveData)\n"
+                    "— Понимание архитектурных паттернов (MVVM, Clean Architecture)\n"
+                    "— Приветствуется: pet-проекты на GitHub, опубликованные приложения\n\n"
+                    "Условия:\n"
+                    "— Зарплата 100 000–140 000 ₽\n"
+                    "— Гибридный формат, офис в Екатеринбурге\n"
+                    "— Небольшая команда (7 человек), быстрые решения без бюрократии\n"
+                    "— Корпоративный абонемент в спортзал"
+                ),
+                opportunity_type=OpportunityType.vacancy,
+                work_format=WorkFormat.hybrid,
+                status=OpportunityStatus.active,
+                city="Екатеринбург",
+                address="ул. Малышева, 51",
+                lat=56.838011,
+                lng=60.597474,
+                salary_from=100000,
+                salary_to=140000,
+                published_at=now - timedelta(days=5),
+            ),
+            Opportunity(
+                employer_id=mc.id,
+                title="Стажёр iOS-разработчик",
+                description=(
+                    "MobileCraft приглашает стажёров в команду iOS-разработки. "
+                    "Работаем над приложением с 400K+ установок в App Store.\n\n"
+                    "Что предстоит делать:\n"
+                    "— Доработка и улучшение существующих экранов на SwiftUI\n"
+                    "— Написание юнит-тестов (XCTest) для бизнес-логики\n"
+                    "— Участие в code review: ревьюим код друг друга в команде\n"
+                    "— Работа с Combine для реактивных потоков данных\n"
+                    "— Исправление багов по репортам из Crashlytics\n\n"
+                    "Кого ищем:\n"
+                    "— Знание Swift на уровне основ, понимание типов и опциональных значений\n"
+                    "— Базовое знакомство с UIKit или SwiftUI\n"
+                    "— Желание учиться и задавать вопросы\n\n"
+                    "Условия:\n"
+                    "— Полностью удалённо, гибкий график\n"
+                    "— Оплата 45 000–70 000 ₽\n"
+                    "— Менторство 1:1 с iOS Lead\n"
+                    "— Возможность конвертации в full-time после стажировки"
+                ),
+                opportunity_type=OpportunityType.internship,
+                work_format=WorkFormat.remote,
+                status=OpportunityStatus.active,
+                city="Екатеринбург",
+                lat=56.838011,
+                lng=60.597474,
+                salary_from=45000,
+                salary_to=70000,
+                published_at=now - timedelta(days=4),
+            ),
+            Opportunity(
+                employer_id=mc.id,
+                title="Unity-разработчик (стажировка)",
+                description=(
+                    "MobileCraft разрабатывает казуальные мобильные игры. "
+                    "Наш хит в жанре puzzle набрал 2M+ загрузок. "
+                    "Ищем стажёра в команду геймдева.\n\n"
+                    "Задачи:\n"
+                    "— Разработка новых игровых механик на Unity + C#\n"
+                    "— Профилирование и оптимизация производительности на мобильных устройствах\n"
+                    "— Работа с Addressables для динамической подгрузки контента\n"
+                    "— Интеграция Firebase (аналитика, A/B-тесты, remote config)\n"
+                    "— Участие в разработке UI-экранов (Unity UI / UI Toolkit)\n\n"
+                    "Требования:\n"
+                    "— Знание C# и основ объектно-ориентированного программирования\n"
+                    "— Базовое понимание Unity (сцены, компоненты, префабы)\n"
+                    "— Будет плюсом: собственные игровые проекты или джемы\n\n"
+                    "Условия:\n"
+                    "— Оплата 40 000–65 000 ₽\n"
+                    "— Гибридный формат, офис в Екатеринбурге\n"
+                    "— Доступ к Unity Pro лицензии\n"
+                    "— Участие в внутренних геймджемах компании"
+                ),
+                opportunity_type=OpportunityType.internship,
+                work_format=WorkFormat.hybrid,
+                status=OpportunityStatus.active,
+                city="Екатеринбург",
+                address="ул. Малышева, 51",
+                lat=56.838011,
+                lng=60.597474,
+                salary_from=40000,
+                salary_to=65000,
+                published_at=now - timedelta(days=7),
+            ),
+            Opportunity(
+                employer_id=mc.id,
+                title="Менторство по мобильной разработке",
+                description=(
+                    "MobileCraft запускает двухмесячную менторскую программу для тех, "
+                    "кто хочет стартовать карьеру в мобильной разработке.\n\n"
+                    "Как устроена программа:\n"
+                    "— Выбираешь трек: Android (Kotlin + Jetpack) или iOS (Swift + SwiftUI)\n"
+                    "— 3 встречи в неделю с ментором (1 час каждая)\n"
+                    "— Практические задания, приближённые к реальным рабочим задачам\n"
+                    "— Code review твоих решений от опытного разработчика\n"
+                    "— Помощь с оформлением портфолио и резюме\n"
+                    "— Финальный мини-проект с публикацией в магазин\n\n"
+                    "Для кого:\n"
+                    "— Начинающие разработчики с базовыми знаниями языка (Swift или Kotlin)\n"
+                    "— Студенты, желающие получить первый реальный опыт\n"
+                    "— Те, кто переходит в мобильную разработку из другой области\n\n"
+                    "Программа удалённая и бесплатная. "
+                    "Количество мест ограничено: 5 человек на каждый трек. "
+                    "Лучшие участники получат приглашение на собеседование в MobileCraft."
+                ),
+                opportunity_type=OpportunityType.mentoring,
+                work_format=WorkFormat.remote,
+                status=OpportunityStatus.active,
+                city="Екатеринбург",
+                lat=56.838011,
+                lng=60.597474,
+                published_at=now - timedelta(days=2),
+            ),
+        ]
+
+        # Сохраняем только те, которых нет
+        has_active = db.scalar(select(Opportunity.id).where(Opportunity.status == OpportunityStatus.active))
+        if not has_active:
+            for opp in opps_data:
+                db.add(opp)
+            db.flush()
+
+            # Привязываем теги к возможностям
+            slugs_needed = [
+                "python", "fastapi", "sql", "docker", "linux", "git",
+                "junior", "middle", "senior", "intern",
+                "react", "typescript", "javascript", "vue", "angular", "nodejs",
+                "java", "spring", "go", "ml", "redis", "kafka", "k8s", "aws",
+                "csharp", "kotlin", "swift", "android", "ios", "unity", "rust", "postgres", "mongodb",
+                "students", "no-exp", "full-time", "part-time", "project",
+            ]
+            tag_map: dict[str, Tag | None] = {slug: tag(slug) for slug in slugs_needed}
+
+            def add_tags(opp: Opportunity, slugs: list[str]) -> None:
+                for s in slugs:
+                    t = tag_map.get(s)
+                    if t:
+                        db.add(OpportunityTag(opportunity_id=opp.id, tag_id=t.id))
+
+            # TechCorp
+            add_tags(opps_data[0],  ["python", "fastapi", "sql", "intern", "students"])
+            add_tags(opps_data[1],  ["react", "typescript", "javascript", "junior"])
+            add_tags(opps_data[2],  ["python", "fastapi", "sql", "redis", "docker", "middle"])
+            add_tags(opps_data[3],  ["ml", "python", "students", "no-exp"])
+            add_tags(opps_data[4],  ["docker", "k8s", "linux", "intern", "students"])
+            # FinTech Lab
+            add_tags(opps_data[5],  ["java", "spring", "sql", "kafka", "intern", "students"])
+            add_tags(opps_data[6],  ["go", "sql", "redis", "docker", "k8s", "middle"])
+            add_tags(opps_data[7],  ["csharp", "sql", "junior"])
+            add_tags(opps_data[8],  ["python", "java", "students", "no-exp"])
+            # DataVision
+            add_tags(opps_data[9],  ["python", "ml", "sql", "intern"])
+            add_tags(opps_data[10], ["python", "sql", "junior", "full-time"])
+            add_tags(opps_data[11], ["python", "ml", "docker", "k8s", "middle"])
+            add_tags(opps_data[12], ["students", "no-exp"])
+            # CloudWave
+            add_tags(opps_data[13], ["docker", "k8s", "aws", "linux", "junior"])
+            add_tags(opps_data[14], ["docker", "k8s", "linux", "intern", "students"])
+            add_tags(opps_data[15], ["docker", "k8s", "linux", "students", "no-exp"])
+            # MobileCraft
+            add_tags(opps_data[16], ["kotlin", "android", "junior"])
+            add_tags(opps_data[17], ["swift", "ios", "intern", "students"])
+            add_tags(opps_data[18], ["unity", "csharp", "intern", "students"])
+            add_tags(opps_data[19], ["kotlin", "swift", "android", "ios", "students", "no-exp"])
+
+            db.commit()
+
+        # ── Соискатели ────────────────────────────────────────────────────────
+        applicants_data = [
+            {
+                "email": "ivan@student.ru",
+                "display_name": "Иван Петров",
+                "full_name": "Иван Алексеевич Петров",
+                "university": "МГУ им. М.В. Ломоносова",
+                "graduation_year": 2025,
+                "bio": "Студент 4 курса ВМК, увлекаюсь backend-разработкой на Python. Ищу стажировку.",
+                "github_url": "https://github.com/ivan-petrov-dev",
+                "skills": ["python", "sql", "fastapi", "docker", "intern"],
+            },
+            {
+                "email": "maria@student.ru",
+                "display_name": "Мария Смирнова",
+                "full_name": "Мария Дмитриевна Смирнова",
+                "university": "НИУ ВШЭ",
+                "graduation_year": 2026,
+                "bio": "Фронтенд-разработчик, работаю с React и TypeScript. Ищу первую работу.",
+                "github_url": "https://github.com/masha-codes",
+                "skills": ["react", "typescript", "javascript", "junior"],
+            },
+            {
+                "email": "alex@graduate.ru",
+                "display_name": "Алексей Козлов",
+                "full_name": "Алексей Игоревич Козлов",
+                "university": "МФТИ",
+                "graduation_year": 2024,
+                "bio": "Выпускник МФТИ, Data Science. Опыт работы с ML-моделями, Python, SQL.",
+                "github_url": "https://github.com/alex-ml",
+                "skills": ["python", "ml", "sql", "middle"],
+            },
+            {
+                "email": "olga@student.ru",
+                "display_name": "Ольга Новикова",
+                "full_name": "Ольга Сергеевна Новикова",
+                "university": "СПбГУ",
+                "graduation_year": 2025,
+                "bio": "Студентка факультета ПМ-ПУ. Интересуюсь Java и финтехом.",
+                "github_url": None,
+                "skills": ["java", "sql", "intern", "students"],
+            },
+            {
+                "email": "dmitry@student.ru",
+                "display_name": "Дмитрий Волков",
+                "full_name": "Дмитрий Сергеевич Волков",
+                "university": "ИТМО",
+                "graduation_year": 2025,
+                "bio": "Разработчик на Go, интересуюсь распределёнными системами и Kubernetes.",
+                "github_url": "https://github.com/dvolkov-go",
+                "skills": ["go", "docker", "k8s", "linux", "middle"],
+            },
+            {
+                "email": "anna@student.ru",
+                "display_name": "Анна Морозова",
+                "full_name": "Анна Павловна Морозова",
+                "university": "МГТУ им. Н.Э. Баумана",
+                "graduation_year": 2026,
+                "bio": "Студентка 3 курса, занимаюсь Android-разработкой на Kotlin. Есть два приложения в Play Store.",
+                "github_url": "https://github.com/anna-android",
+                "skills": ["kotlin", "android", "java", "intern"],
+            },
+            {
+                "email": "nikita@graduate.ru",
+                "display_name": "Никита Соколов",
+                "full_name": "Никита Андреевич Соколов",
+                "university": "УрФУ",
+                "graduation_year": 2024,
+                "bio": "Выпускник, разрабатываю игры на Unity. Есть опыт работы над мобильными гиперказуалками.",
+                "github_url": "https://github.com/nikita-unity",
+                "skills": ["unity", "csharp", "junior"],
+            },
+            {
+                "email": "kate@student.ru",
+                "display_name": "Екатерина Белова",
+                "full_name": "Екатерина Игоревна Белова",
+                "university": "НГУ",
+                "graduation_year": 2026,
+                "bio": "Изучаю DevOps: Linux, Docker, CI/CD. Прохожу курс по Kubernetes.",
+                "github_url": "https://github.com/kate-devops",
+                "skills": ["linux", "docker", "git", "intern", "students"],
+            },
+        ]
+
+        applicant_profiles: list[ApplicantProfile] = []
+        for ad in applicants_data:
+            existing = db.scalar(select(User).where(User.email == ad["email"]))
+            if existing:
+                ap = db.scalar(select(ApplicantProfile).where(ApplicantProfile.user_id == existing.id))
+            else:
+                u = User(
+                    email=ad["email"],
+                    display_name=ad["display_name"],
+                    hashed_password=hash_password("demo1234"),
+                    role=UserRole.applicant,
+                    is_active=True,
+                )
+                db.add(u)
+                db.flush()
+                ap = ApplicantProfile(
+                    user_id=u.id,
+                    full_name=ad["full_name"],
+                    university=ad["university"],
+                    graduation_year=ad["graduation_year"],
+                    bio=ad["bio"],
+                    github_url=ad["github_url"],
+                )
+                db.add(ap)
+                db.flush()
+                for slug in ad["skills"]:
+                    t = tag(slug)
+                    if t:
+                        db.add(ApplicantSkill(applicant_id=ap.id, tag_id=t.id))
+            if ap:
+                applicant_profiles.append(ap)
         db.commit()
+
+        # ── Отклики ───────────────────────────────────────────────────────────
+        active_opps = list(db.scalars(
+            select(Opportunity).where(Opportunity.status == OpportunityStatus.active)
+        ).all())
+        if not active_opps or not applicant_profiles:
+            return
+
+        def opp_by_title(title_fragment: str) -> Opportunity | None:
+            for o in active_opps:
+                if title_fragment.lower() in o.title.lower():
+                    return o
+            return None
+
+        ivan, maria, alex, olga, dmitry, anna, nikita, kate = applicant_profiles[:8]
+
+        apps_to_create = [
+            (ivan,   "Python Backend стажёр",    "accepted", "Очень хочу попасть в вашу команду! Работал с FastAPI и PostgreSQL в учебных проектах."),
+            (ivan,   "Стажёр Data Scientist",    "pending",  "Знаком с pandas и sklearn, прохожу курс по ML. Готов активно учиться."),
+            (ivan,   "DevOps-инженер (стажировка)", "pending", "Активно изучаю Docker и CI/CD, есть пет-проект с автодеплоем на VPS."),
+            (maria,  "Junior Frontend разработчик", "pending", "Разрабатывал несколько React-приложений, есть портфолио на GitHub."),
+            (maria,  "Хакатон TechCorp 2025",    "accepted", "Хочу участвовать в команде, есть опыт хакатонов в универе."),
+            (alex,   "Аналитик данных (Junior)", "accepted", "Выпускник МФТИ, 2 года работал с данными в рамках научных проектов."),
+            (alex,   "Стажёр Data Scientist",    "rejected", "Опыт работы с PyTorch и трансформерами для NLP-задач."),
+            (alex,   "Middle ML-инженер",        "pending",  "Работал с production ML-пайплайнами в учебном стартапе."),
+            (olga,   "Java-разработчик (стажировка)", "pending", "Изучаю Java Spring Boot, есть учебные проекты с REST API."),
+            (olga,   "Менторская программа по финтеху", "accepted", "Хочу развиваться в финтехе, ищу наставника."),
+            (dmitry, "Middle Go-разработчик",    "pending",  "2 года пишу на Go, участвовал в разработке микросервисного бэкенда."),
+            (dmitry, "DevOps-инженер (Junior)",  "accepted", "Умею в Docker, k8s, настраивал GitLab CI в учебных проектах."),
+            (anna,   "Junior Android-разработчик", "pending", "Два приложения в Play Store на Kotlin + Jetpack Compose."),
+            (anna,   "Стажёр iOS-разработчик",  "pending",  "Хочу попробовать iOS-разработку, есть базовые знания Swift."),
+            (nikita, "Unity-разработчик (стажировка)", "accepted", "Разработал 3 мобильные игры на Unity, опыт с Addressables."),
+            (nikita, "Менторство по мобильной разработке", "pending", "Хочу улучшить навыки под руководством опытного разработчика."),
+            (kate,   "Стажёр SRE / Platform Engineer", "pending", "Изучаю Prometheus и Grafana, настраивал мониторинг для учебного проекта."),
+            (kate,   "DevOps-инженер (стажировка)", "pending", "Знаю Linux, Docker, основы Kubernetes. Хочу развиваться в этом направлении."),
+        ]
+
+        for ap, title_frag, status_str, letter in apps_to_create:
+            opp = opp_by_title(title_frag)
+            if not opp:
+                continue
+            existing_app = db.scalar(
+                select(Application).where(
+                    Application.applicant_id == ap.id,
+                    Application.opportunity_id == opp.id,
+                )
+            )
+            if existing_app:
+                continue
+            status = ApplicationStatus[status_str]
+            db.add(Application(
+                applicant_id=ap.id,
+                opportunity_id=opp.id,
+                status=status,
+                cover_letter=letter,
+                created_at=datetime.now(UTC) - timedelta(days=1),
+            ))
+        db.commit()
+
     finally:
         db.close()
-

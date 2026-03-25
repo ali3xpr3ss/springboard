@@ -38,6 +38,7 @@ class Opportunity(Base):
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     event_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     employer = relationship("EmployerProfile", back_populates="opportunities")
     opportunity_tags = relationship("OpportunityTag", back_populates="opportunity", cascade="all, delete-orphan")

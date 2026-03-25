@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -7,11 +7,14 @@ from ..db.session import get_db
 from ..models import (
     ApplicantProfile,
     Application,
+    ApplicationStatus,
     EmployerProfile,
     Opportunity,
+    OpportunityStatus,
     OpportunityTag,
     User,
     UserRole,
+    VerificationStatus,
 )
 from ..schemas.employer import (
     ApplicationStatusUpdate,
@@ -45,6 +48,9 @@ def update_me(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Профиль не найден")
 
     data = payload.model_dump(exclude_unset=True)
+    verification_fields = {"inn", "corp_email_domain"}
+    if verification_fields & data.keys():
+        data["verification_status"] = VerificationStatus.pending
     for k, v in data.items():
         setattr(p, k, v)
     db.commit()
@@ -56,14 +62,17 @@ def update_me(
 def get_employer_opportunities(
     db: Session = Depends(get_db),
     user: User = Depends(require_role(UserRole.employer)),
+    opp_status: OpportunityStatus | None = Query(default=None, alias="status"),
 ) -> list[OpportunityOut]:
     profile = db.scalar(select(EmployerProfile).where(EmployerProfile.user_id == user.id))
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Профиль не найден")
 
-    opps = list(db.scalars(
-        select(Opportunity).where(Opportunity.employer_id == profile.id).order_by(Opportunity.published_at.desc())
-    ).all())
+    stmt = select(Opportunity).where(Opportunity.employer_id == profile.id)
+    if opp_status is not None:
+        stmt = stmt.where(Opportunity.status == opp_status)
+    stmt = stmt.order_by(Opportunity.published_at.desc())
+    opps = list(db.scalars(stmt).all())
     return _build_opportunity_outs(opps, db)
 
 
@@ -126,6 +135,8 @@ def delete_opportunity(
 def get_employer_applications(
     db: Session = Depends(get_db),
     user: User = Depends(require_role(UserRole.employer)),
+    q: str | None = None,
+    app_status: ApplicationStatus | None = Query(default=None, alias="status"),
 ) -> list[EmployerApplicationOut]:
     profile = db.scalar(select(EmployerProfile).where(EmployerProfile.user_id == user.id))
     if not profile:
@@ -137,11 +148,17 @@ def get_employer_applications(
     if not opp_ids:
         return []
 
-    applications = list(db.scalars(
+    stmt = (
         select(Application)
+        .join(ApplicantProfile, ApplicantProfile.id == Application.applicant_id)
         .where(Application.opportunity_id.in_(opp_ids))
-        .order_by(Application.created_at.desc())
-    ).all())
+    )
+    if app_status is not None:
+        stmt = stmt.where(Application.status == app_status)
+    if q:
+        stmt = stmt.where(ApplicantProfile.full_name.ilike(f"%{q}%"))
+    stmt = stmt.order_by(Application.created_at.desc())
+    applications = list(db.scalars(stmt).all())
 
     applicant_ids = list({a.applicant_id for a in applications})
     profiles_by_id: dict[int, ApplicantProfile] = {}

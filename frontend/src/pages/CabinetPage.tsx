@@ -43,18 +43,7 @@ export function CabinetLayout() {
           <div style={cardStyle}>
             <div style={{ fontWeight: 900 }}>Личный кабинет</div>
             <div style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
-              Роль: <b style={{ color: "var(--text)" }}>{s.role ?? "—"}</b>
-            </div>
-            <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-              <Link to="/cabinet/applicant" style={{ color: "var(--text)", textDecoration: "none" }}>
-                Соискатель
-              </Link>
-              <Link to="/cabinet/employer" style={{ color: "var(--text)", textDecoration: "none" }}>
-                Работодатель
-              </Link>
-              <Link to="/cabinet/curator" style={{ color: "var(--text)", textDecoration: "none" }}>
-                Куратор
-              </Link>
+              Роль: <b style={{ color: "var(--text)" }}>{{ applicant: "Соискатель", employer: "Работодатель", curator: "Куратор" }[s.role ?? ""] ?? "—"}</b>
             </div>
           </div>
         </aside>

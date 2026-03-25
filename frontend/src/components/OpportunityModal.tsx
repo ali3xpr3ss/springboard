@@ -33,37 +33,60 @@ type Props = {
   session: Session | null;
   onClose: () => void;
   onApply: (id: number) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (id: number) => void;
 };
 
-export function OpportunityModal({ opportunity: o, session, onClose, onApply }: Props) {
+export function OpportunityModal({ opportunity: o, session, onClose, onApply, isFavorite, onToggleFavorite }: Props) {
   const salary = salaryText(o);
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
       onClick={onClose}
     >
       <div
-        style={{ ...cardStyle, maxWidth: 640, width: "100%", maxHeight: "85vh", overflowY: "auto", position: "relative" }}
+        style={{ ...cardStyle, background: "#0f1829", maxWidth: 640, width: "100%", maxHeight: "85vh", overflowY: "auto", position: "relative" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          style={{ ...buttonStyle, position: "absolute", top: 12, right: 12, padding: "6px 10px" }}
-          onClick={onClose}
-        >
-          ✕
-        </button>
+        <div style={{ position: "absolute", top: 12, right: 12, display: "flex", gap: 8 }}>
+          {onToggleFavorite && (
+            <button
+              type="button"
+              title={isFavorite ? "Убрать из избранного" : "В избранное"}
+              style={{
+                ...buttonStyle,
+                padding: "6px 10px",
+                background: isFavorite ? "rgba(245,158,11,0.18)" : buttonStyle.background,
+                borderColor: isFavorite ? "rgba(245,158,11,0.6)" : "var(--border)",
+                fontSize: 16,
+              }}
+              onClick={() => onToggleFavorite(o.id)}
+            >
+              {isFavorite ? "★" : "☆"}
+            </button>
+          )}
+          <button
+            type="button"
+            style={{ ...buttonStyle, padding: "6px 10px" }}
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
 
-        <div style={{ paddingRight: 40 }}>
+        <div style={{ paddingRight: onToggleFavorite ? 88 : 44 }}>
+          {o.company_name && (
+            <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 4 }}>{o.company_name}</div>
+          )}
           <div style={{ fontWeight: 800, fontSize: 20 }}>{o.title}</div>
 
           <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", color: "var(--muted)", fontSize: 13 }}>
             <span>{formatType(o.opportunity_type)}</span>
             <span>•</span>
             <span>{formatFormat(o.work_format)}</span>
-            {o.city && <><span>•</span><span>{o.city}</span></>}
-            {salary && <><span>•</span><span style={{ color: "rgba(255,255,255,0.9)" }}>{salary}</span></>}
+            {o.city && <><span>•</span><span>{o.city}{o.address ? `, ${o.address}` : ""}</span></>}
+            {salary && <><span>•</span><span style={{ color: "rgba(255,255,255,0.9)", fontWeight: 700 }}>{salary}</span></>}
           </div>
 
           {o.tags?.length ? (
@@ -87,14 +110,27 @@ export function OpportunityModal({ opportunity: o, session, onClose, onApply }: 
           ) : null}
 
           {o.description ? (
-            <div style={{ marginTop: 14, color: "var(--muted)", fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-              {o.description}
-            </div>
+            <>
+              <div style={{ marginTop: 16, marginBottom: 8, height: 1, background: "var(--border)" }} />
+              <div style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>Описание</div>
+              <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 14, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                {o.description}
+              </div>
+            </>
           ) : null}
 
-          <div style={{ marginTop: 14, display: "flex", gap: 16, fontSize: 12, color: "var(--muted)" }}>
-            {o.expires_at && <span>Действует до: {new Date(o.expires_at).toLocaleDateString("ru-RU")}</span>}
-            {o.event_date && <span>Дата события: {new Date(o.event_date).toLocaleDateString("ru-RU")}</span>}
+          <div style={{ marginTop: 16, marginBottom: 8, height: 1, background: "var(--border)" }} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 24px", fontSize: 12, color: "var(--muted)" }}>
+            <span>Опубликовано: <b style={{ color: "var(--text)" }}>{new Date(o.published_at).toLocaleDateString("ru-RU")}</b></span>
+            {o.expires_at && (
+              <span>Действует до: <b style={{ color: "var(--text)" }}>{new Date(o.expires_at).toLocaleDateString("ru-RU")}</b></span>
+            )}
+            {o.event_date && (
+              <span>Дата события: <b style={{ color: "var(--text)" }}>{new Date(o.event_date).toLocaleDateString("ru-RU")}</b></span>
+            )}
+            {o.scheduled_at && (
+              <span>Запланировано: <b style={{ color: "var(--text)" }}>{new Date(o.scheduled_at).toLocaleDateString("ru-RU")}</b></span>
+            )}
           </div>
 
           {session?.role === "applicant" && (

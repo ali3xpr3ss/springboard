@@ -12,6 +12,7 @@ from .enums import (
     WorkFormat,
 )
 from .favorite import Favorite
+from .recommendation import Recommendation
 from .opportunity import Opportunity
 from .profiles import ApplicantProfile, CuratorProfile, EmployerProfile
 from .refresh_token import RefreshToken
@@ -31,6 +32,7 @@ __all__ = [
     "Application",
     "Favorite",
     "Contact",
+    "Recommendation",
     "UserRole",
     "VerificationStatus",
     "OpportunityType",

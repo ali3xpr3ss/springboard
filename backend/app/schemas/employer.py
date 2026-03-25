@@ -1,6 +1,7 @@
+import re
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..models.enums import ApplicationStatus, VerificationStatus
 
@@ -22,6 +23,15 @@ class EmployerProfileUpdate(BaseModel):
     logo_url: str | None = Field(default=None, max_length=500)
     inn: str | None = Field(default=None, max_length=32)
     corp_email_domain: str | None = Field(default=None, max_length=120)
+
+    @field_validator("inn")
+    @classmethod
+    def validate_inn(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return v
+        if not re.fullmatch(r"\d{10}|\d{12}", v):
+            raise ValueError("ИНН должен содержать 10 или 12 цифр")
+        return v
 
 
 class EmployerApplicationOut(BaseModel):

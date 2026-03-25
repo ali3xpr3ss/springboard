@@ -1,11 +1,15 @@
 .DS_Store
+Thumbs.db
+desktop.ini
 
-# Secrets / env
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.cert
+secrets/
 
-# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -17,8 +21,9 @@ venv/
 dist/
 build/
 *.egg-info/
+.coverage
+htmlcov/
 
-# Node
 node_modules/
 frontend/node_modules/
 frontend/dist/
@@ -28,18 +33,18 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Docker
 *.log
+logs/
 
-# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Конкурсные материалы (не коммитим)
-ifelse_task2.1.pdf
-план разработки платформы.docx
-план разработки платформы.txt
-tramplin_er_diagram.html
+
+backend/static/uploads/
+uploads/
+
 *.pdf
 *.docx
 docs/
