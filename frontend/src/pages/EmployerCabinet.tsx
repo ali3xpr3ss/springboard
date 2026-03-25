@@ -8,6 +8,8 @@ import {
   updateApplicationStatus,
   uploadFile,
   authedFetch,
+  toggleOpportunityStatus,
+  updateOpportunity,
 } from "../api";
 import type { EmployerApplicationOut, ApplicationStatus } from "../types";
 import { loadSession } from "../auth/auth";
@@ -27,20 +29,20 @@ type EmployerProfile = {
 
 type Tab = "profile" | "create" | "vacancies" | "applications";
 
-const tabActiveStyle = { background: "rgba(124,58,237,0.22)", borderColor: "rgba(124,58,237,0.55)" };
+const tabActiveStyle = { background: "rgba(59,130,246,0.1)", borderColor: "rgba(59,130,246,0.45)", color: "#3B82F6" };
 
-const STATUS_COLORS: Record<string, { bg: string; border: string; label: string }> = {
-  active: { bg: "rgba(34,197,94,0.18)", border: "rgba(34,197,94,0.5)", label: "Активна" },
-  pending_moderation: { bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.45)", label: "На модерации" },
-  scheduled: { bg: "rgba(99,102,241,0.15)", border: "rgba(99,102,241,0.5)", label: "Запланирована" },
-  closed: { bg: "rgba(107,114,128,0.15)", border: "rgba(107,114,128,0.4)", label: "Закрыта" },
-  draft: { bg: "rgba(107,114,128,0.1)", border: "rgba(107,114,128,0.3)", label: "Черновик" },
+const STATUS_COLORS: Record<string, { bg: string; border: string; label: string; color: string }> = {
+  active:             { bg: "rgba(34,197,94,0.1)",    border: "rgba(34,197,94,0.4)",    label: "Активна",        color: "#16A34A" },
+  pending_moderation: { bg: "rgba(245,158,11,0.1)",   border: "rgba(245,158,11,0.4)",   label: "На модерации",   color: "#D97706" },
+  scheduled:          { bg: "rgba(99,102,241,0.1)",   border: "rgba(99,102,241,0.4)",   label: "Запланирована",  color: "#6366F1" },
+  closed:             { bg: "rgba(107,114,128,0.1)",  border: "rgba(107,114,128,0.35)", label: "Закрыта",        color: "#6B7280" },
+  draft:              { bg: "var(--panel2)",           border: "var(--border)",          label: "Черновик",       color: "var(--muted)" },
 };
 
-const VERIFICATION_BADGE: Record<string, { bg: string; border: string; label: string }> = {
-  pending: { bg: "rgba(245,158,11,0.15)", border: "rgba(245,158,11,0.5)", label: "На проверке" },
-  approved: { bg: "rgba(34,197,94,0.18)", border: "rgba(34,197,94,0.5)", label: "Верифицирован" },
-  rejected: { bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.5)", label: "Отклонён" },
+const VERIFICATION_BADGE: Record<string, { bg: string; border: string; label: string; color: string }> = {
+  pending:  { bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.4)",  label: "На проверке",  color: "#D97706" },
+  approved: { bg: "rgba(34,197,94,0.1)",   border: "rgba(34,197,94,0.4)",   label: "Верифицирован", color: "#16A34A" },
+  rejected: { bg: "rgba(239,68,68,0.08)",  border: "rgba(239,68,68,0.35)",  label: "Отклонён",     color: "#DC2626" },
 };
 
 const APP_STATUS_LABELS: Record<ApplicationStatus, string> = {
@@ -77,6 +79,7 @@ export function EmployerCabinet() {
   const [logoUploading, setLogoUploading] = useState(false);
 
   const [creating, setCreating] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
   const [useScheduled, setUseScheduled] = useState(false);
   const [newOpp, setNewOpp] = useState<{
     title: string;
@@ -85,8 +88,8 @@ export function EmployerCabinet() {
     work_format: WorkFormat;
     city: string;
     address: string;
-    lat: string;
-    lng: string;
+    lat: number | null;
+    lng: number | null;
     salary_from: string;
     salary_to: string;
     scheduled_at: string;
@@ -97,12 +100,23 @@ export function EmployerCabinet() {
     work_format: "remote",
     city: "",
     address: "",
-    lat: "",
-    lng: "",
+    lat: null,
+    lng: null,
     salary_from: "",
     salary_to: "",
     scheduled_at: "",
   });
+
+  const [editingVac, setEditingVac] = useState<Opportunity | null>(null);
+  const [editVacData, setEditVacData] = useState<{
+    title: string;
+    description: string;
+    city: string;
+    address: string;
+    salary_from: string;
+    salary_to: string;
+  }>({ title: "", description: "", city: "", address: "", salary_from: "", salary_to: "" });
+  const [editVacSaving, setEditVacSaving] = useState(false);
 
   const [vacancies, setVacancies] = useState<Opportunity[]>([]);
   const [vacanciesLoading, setVacanciesLoading] = useState(false);
@@ -175,8 +189,8 @@ export function EmployerCabinet() {
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={cardStyle}>
-        <div style={{ fontWeight: 900, fontSize: 16 }}>Кабинет работодателя</div>
-        <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 700, fontSize: 16 }}>Кабинет работодателя</div>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
           {(["profile", "create", "vacancies", "applications"] as Tab[]).map((t) => {
             const disabled = t === "create" && !isVerified;
             return (
@@ -201,23 +215,23 @@ export function EmployerCabinet() {
 
       {tab === "profile" && (
         <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Профиль компании</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Профиль компании</div>
             {verBadge && (
-              <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 999, border: `1px solid ${verBadge.border}`, background: verBadge.bg }}>
+              <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 999, border: `1px solid ${verBadge.border}`, background: verBadge.bg, color: verBadge.color, fontWeight: 500 }}>
                 {verBadge.label}
               </span>
             )}
           </div>
           {!isVerified && p && (
-            <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.35)", fontSize: 12, color: "rgba(245,158,11,0.95)" }}>
+            <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.3)", fontSize: 13, color: "#92400E" }}>
               Заполните ИНН и домен корпоративной почты, сохраните профиль. После проверки куратором вы сможете создавать вакансии.
             </div>
           )}
-          {error ? <div style={{ marginTop: 0, marginBottom: 10, color: "rgba(245,158,11,0.95)", whiteSpace: "pre-wrap" }}>{error}</div> : null}
-          {!p ? <div style={{ marginTop: 10 }}>Загрузка…</div> : null}
+          {error ? <div style={{ marginBottom: 12, color: "#B45309", whiteSpace: "pre-wrap", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 8, padding: "8px 12px", fontSize: 13 }}>{error}</div> : null}
+          {!p ? <div style={{ color: "var(--muted)" }}>Загрузка…</div> : null}
           {p ? (
-            <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ display: "grid", gap: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <input style={inputStyle} value={p.company_name ?? ""} onChange={(e) => setP({ ...p, company_name: e.target.value })} placeholder="Название компании" />
                 <input style={inputStyle} value={p.industry ?? ""} onChange={(e) => setP({ ...p, industry: e.target.value })} placeholder="Сфера деятельности" />
@@ -225,7 +239,7 @@ export function EmployerCabinet() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <input style={inputStyle} value={p.website_url ?? ""} onChange={(e) => setP({ ...p, website_url: e.target.value })} placeholder="Сайт" />
                 <div>
-                  <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Логотип</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>Логотип</div>
                   {p.logo_url && (
                     <img src={p.logo_url} alt="logo" style={{ width: 52, height: 52, objectFit: "contain", borderRadius: 8, marginBottom: 6, border: "1px solid var(--border)" }} />
                   )}
@@ -233,7 +247,7 @@ export function EmployerCabinet() {
                     type="file"
                     accept="image/*"
                     disabled={logoUploading}
-                    style={{ display: "block", fontSize: 12, color: "var(--muted)" }}
+                    style={{ display: "block", fontSize: 13, color: "var(--muted)" }}
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
@@ -248,7 +262,7 @@ export function EmployerCabinet() {
                       }
                     }}
                   />
-                  {logoUploading && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Загрузка…</div>}
+                  {logoUploading && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>Загрузка…</div>}
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -262,13 +276,13 @@ export function EmployerCabinet() {
                     }}
                     placeholder="ИНН (10 или 12 цифр)"
                   />
-                  {innError && <div style={{ fontSize: 11, color: "rgba(239,68,68,0.9)", marginTop: 3 }}>{innError}</div>}
+                  {innError && <div style={{ fontSize: 12, color: "#DC2626", marginTop: 4 }}>{innError}</div>}
                 </div>
                 <input style={inputStyle} value={p.corp_email_domain ?? ""} onChange={(e) => setP({ ...p, corp_email_domain: e.target.value })} placeholder="Домен корп. почты (напр. company.ru)" />
               </div>
               <button
                 type="button"
-                style={{ ...buttonStyle, background: "rgba(34,197,94,0.18)", borderColor: "rgba(34,197,94,0.5)" }}
+                style={{ ...buttonStyle, background: "rgba(34,197,94,0.1)", borderColor: "rgba(34,197,94,0.45)", color: "#16A34A" }}
                 disabled={saving || logoUploading}
                 onClick={async () => {
                   if (p.inn && !/^\d{10}$|^\d{12}$/.test(p.inn)) {
@@ -301,12 +315,12 @@ export function EmployerCabinet() {
 
       {tab === "create" && (
         <div style={cardStyle}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Создать возможность</div>
-          <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 12 }}>
-            Созданные возможности попадают на модерацию. Куратор одобряет — они появляются на главной.
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Создать публикацию</div>
+          <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 13 }}>
+            Новые публикации проходят модерацию. Куратор одобряет — они появляются на главной странице.
           </div>
-          {error ? <div style={{ marginTop: 10, color: "rgba(245,158,11,0.95)", whiteSpace: "pre-wrap" }}>{error}</div> : null}
-          <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+          {error ? <div style={{ marginTop: 12, color: "#B45309", whiteSpace: "pre-wrap", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 8, padding: "8px 12px", fontSize: 13 }}>{error}</div> : null}
+          <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
             <input style={inputStyle} placeholder="Название позиции / мероприятия" value={newOpp.title} onChange={(e) => setNewOpp({ ...newOpp, title: e.target.value })} />
             <textarea style={{ ...inputStyle, minHeight: 110, resize: "vertical" }} placeholder="Краткое описание" value={newOpp.description} onChange={(e) => setNewOpp({ ...newOpp, description: e.target.value })} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -324,17 +338,51 @@ export function EmployerCabinet() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <input style={inputStyle} placeholder="Город" value={newOpp.city} onChange={(e) => setNewOpp({ ...newOpp, city: e.target.value })} />
-              <input style={inputStyle} placeholder="Адрес" value={newOpp.address} onChange={(e) => setNewOpp({ ...newOpp, address: e.target.value })} />
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  style={{ ...inputStyle, flex: 1 }}
+                  placeholder="Адрес (улица, дом)"
+                  value={newOpp.address}
+                  onChange={(e) => setNewOpp({ ...newOpp, address: e.target.value, lat: null, lng: null })}
+                />
+                <button
+                  type="button"
+                  title="Найти координаты по адресу"
+                  style={{ ...buttonStyle, flexShrink: 0, padding: "0 10px", fontSize: 16 }}
+                  disabled={geocoding || !newOpp.address.trim()}
+                  onClick={async () => {
+                    const q = [newOpp.city, newOpp.address].filter(Boolean).join(", ");
+                    if (!q) return;
+                    setGeocoding(true);
+                    try {
+                      const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`, { headers: { "Accept-Language": "ru" } });
+                      const data = await r.json();
+                      if (data[0]) {
+                        setNewOpp((prev) => ({ ...prev, lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }));
+                      } else {
+                        alert("Адрес не найден. Уточните город или улицу.");
+                      }
+                    } catch {
+                      alert("Ошибка геокодирования");
+                    } finally {
+                      setGeocoding(false);
+                    }
+                  }}
+                >
+                  {geocoding ? "…" : "📍"}
+                </button>
+              </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <input style={inputStyle} placeholder="lat" inputMode="decimal" value={newOpp.lat} onChange={(e) => setNewOpp({ ...newOpp, lat: e.target.value })} />
-              <input style={inputStyle} placeholder="lng" inputMode="decimal" value={newOpp.lng} onChange={(e) => setNewOpp({ ...newOpp, lng: e.target.value })} />
-            </div>
+            {newOpp.lat !== null && newOpp.lng !== null && (
+              <div style={{ fontSize: 12, color: "#16A34A" }}>
+                Координаты найдены: {newOpp.lat.toFixed(5)}, {newOpp.lng.toFixed(5)}
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <input style={inputStyle} placeholder="ЗП от" inputMode="numeric" value={newOpp.salary_from} onChange={(e) => setNewOpp({ ...newOpp, salary_from: e.target.value })} />
               <input style={inputStyle} placeholder="ЗП до" inputMode="numeric" value={newOpp.salary_to} onChange={(e) => setNewOpp({ ...newOpp, salary_to: e.target.value })} />
             </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", color: "var(--text)" }}>
               <input
                 type="checkbox"
                 checked={useScheduled}
@@ -347,7 +395,7 @@ export function EmployerCabinet() {
             </label>
             {useScheduled && (
               <div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Дата и время публикации</div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>Дата и время публикации</div>
                 <input
                   type="datetime-local"
                   style={inputStyle}
@@ -358,7 +406,7 @@ export function EmployerCabinet() {
             )}
             <button
               type="button"
-              style={{ ...buttonStyle, background: "rgba(124,58,237,0.22)", borderColor: "rgba(124,58,237,0.55)" }}
+              style={{ ...buttonStyle, background: "rgba(59,130,246,0.1)", borderColor: "rgba(59,130,246,0.45)", color: "#3B82F6" }}
               disabled={creating || !newOpp.title.trim()}
               onClick={async () => {
                 setCreating(true);
@@ -371,8 +419,8 @@ export function EmployerCabinet() {
                     work_format: newOpp.work_format,
                     city: newOpp.city || null,
                     address: newOpp.address || null,
-                    lat: newOpp.lat.trim() ? Number(newOpp.lat) : null,
-                    lng: newOpp.lng.trim() ? Number(newOpp.lng) : null,
+                    lat: newOpp.lat,
+                    lng: newOpp.lng,
                     salary_from: newOpp.salary_from.trim() ? Number(newOpp.salary_from) : null,
                     salary_to: newOpp.salary_to.trim() ? Number(newOpp.salary_to) : null,
                     scheduled_at: useScheduled && newOpp.scheduled_at ? new Date(newOpp.scheduled_at).toISOString() : null,
@@ -385,7 +433,7 @@ export function EmployerCabinet() {
                   });
                   if (!res.ok) throw new Error(await res.text());
                   const created: Opportunity = await res.json();
-                  setNewOpp({ ...newOpp, title: "", description: "", scheduled_at: "" });
+                  setNewOpp({ title: "", description: "", opportunity_type: "vacancy", work_format: "remote", city: "", address: "", lat: null, lng: null, salary_from: "", salary_to: "", scheduled_at: "" });
                   setUseScheduled(false);
                   alert(`Создано (#${created.id}). Статус: ${created.status}`);
                 } catch (e: any) {
@@ -403,8 +451,8 @@ export function EmployerCabinet() {
 
       {tab === "vacancies" && (
         <div style={cardStyle}>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Мои вакансии</div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
+            <div style={{ fontWeight: 600, fontSize: 15, flex: 1 }}>Мои вакансии</div>
             <select
               style={{ ...inputStyle, width: "auto" }}
               value={vacStatus}
@@ -414,44 +462,135 @@ export function EmployerCabinet() {
             </select>
           </div>
           {vacanciesLoading ? (
-            <div>Загрузка…</div>
+            <div style={{ color: "var(--muted)" }}>Загрузка…</div>
           ) : vacancies.length === 0 ? (
             <div style={{ color: "var(--muted)", fontSize: 13 }}>Вакансий не найдено.</div>
           ) : (
             <div style={{ display: "grid", gap: 10 }}>
               {vacancies.map((v) => {
-                const sc = STATUS_COLORS[v.status] ?? { bg: "rgba(255,255,255,0.08)", border: "var(--border)", label: v.status };
+                const sc = STATUS_COLORS[v.status] ?? { bg: "var(--panel2)", border: "var(--border)", label: v.status, color: "var(--muted)" };
+                const isExpanded = editingVac?.id === v.id;
                 return (
-                  <div key={v.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 12, display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700 }}>{v.title}</div>
-                      <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 12 }}>
-                        {v.opportunity_type} • {v.work_format}{v.city ? ` • ${v.city}` : ""}
-                      </div>
-                      {v.status === "scheduled" && v.scheduled_at && (
-                        <div style={{ marginTop: 3, fontSize: 11, color: "rgba(99,102,241,0.85)" }}>
-                          Публикация: {new Date(v.scheduled_at).toLocaleString("ru-RU")}
-                        </div>
-                      )}
-                    </div>
-                    <span style={{ flexShrink: 0, fontSize: 12, padding: "3px 10px", borderRadius: 999, border: `1px solid ${sc.border}`, background: sc.bg }}>
-                      {sc.label}
-                    </span>
-                    <button
-                      type="button"
-                      style={{ ...buttonStyle, padding: "6px 10px", fontSize: 12, background: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.4)" }}
-                      onClick={async () => {
-                        if (!window.confirm(`Удалить «${v.title}»?`)) return;
-                        try {
-                          await deleteOpportunity(session, v.id);
-                          setVacancies((prev) => prev.filter((x) => x.id !== v.id));
-                        } catch (e: any) {
-                          alert(e?.message ?? "Ошибка удаления");
+                  <div key={v.id} style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--panel)" }}>
+                    <div
+                      style={{ padding: 12, display: "flex", gap: 12, alignItems: "center", cursor: "pointer" }}
+                      onClick={() => {
+                        if (isExpanded) {
+                          setEditingVac(null);
+                        } else {
+                          setEditingVac(v);
+                          setEditVacData({
+                            title: v.title,
+                            description: v.description ?? "",
+                            city: v.city ?? "",
+                            address: v.address ?? "",
+                            salary_from: v.salary_from != null ? String(v.salary_from) : "",
+                            salary_to: v.salary_to != null ? String(v.salary_to) : "",
+                          });
                         }
                       }}
                     >
-                      Удалить
-                    </button>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, color: "var(--text)" }}>{v.title}</div>
+                        <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 13 }}>
+                          {v.opportunity_type} • {v.work_format}{v.city ? ` • ${v.city}` : ""}
+                        </div>
+                        {v.status === "scheduled" && v.scheduled_at && (
+                          <div style={{ marginTop: 3, fontSize: 12, color: "#6366F1" }}>
+                            Публикация: {new Date(v.scheduled_at).toLocaleString("ru-RU")}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        title={v.status === "active" ? "Деактивировать" : v.status === "closed" ? "Активировать" : undefined}
+                        style={{
+                          ...buttonStyle,
+                          flexShrink: 0,
+                          fontSize: 12,
+                          padding: "4px 10px",
+                          background: sc.bg,
+                          borderColor: sc.border,
+                          color: sc.color,
+                          fontWeight: 500,
+                          cursor: (v.status === "active" || v.status === "closed") ? "pointer" : "default",
+                        }}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (v.status !== "active" && v.status !== "closed") return;
+                          try {
+                            const updated = await toggleOpportunityStatus(session, v.id);
+                            setVacancies((prev) => prev.map((x) => x.id === v.id ? updated : x));
+                          } catch (err: any) {
+                            alert(err?.message ?? "Ошибка");
+                          }
+                        }}
+                      >
+                        {sc.label}
+                      </button>
+                      <button
+                        type="button"
+                        style={{ ...buttonStyle, flexShrink: 0, padding: "6px 10px", fontSize: 12, background: "rgba(239,68,68,0.07)", borderColor: "rgba(239,68,68,0.35)", color: "#DC2626" }}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!window.confirm(`Удалить «${v.title}»?`)) return;
+                          try {
+                            await deleteOpportunity(session, v.id);
+                            setVacancies((prev) => prev.filter((x) => x.id !== v.id));
+                            if (editingVac?.id === v.id) setEditingVac(null);
+                          } catch (err: any) {
+                            alert(err?.message ?? "Ошибка удаления");
+                          }
+                        }}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+
+                    {isExpanded && (
+                      <div style={{ borderTop: "1px solid var(--border)", padding: 14, display: "grid", gap: 10, background: "var(--panel2)" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)", marginBottom: 2 }}>Редактировать</div>
+                        <input style={inputStyle} placeholder="Название" value={editVacData.title} onChange={(e) => setEditVacData({ ...editVacData, title: e.target.value })} />
+                        <textarea style={{ ...inputStyle, minHeight: 90, resize: "vertical" }} placeholder="Описание" value={editVacData.description} onChange={(e) => setEditVacData({ ...editVacData, description: e.target.value })} />
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          <input style={inputStyle} placeholder="Город" value={editVacData.city} onChange={(e) => setEditVacData({ ...editVacData, city: e.target.value })} />
+                          <input style={inputStyle} placeholder="Адрес" value={editVacData.address} onChange={(e) => setEditVacData({ ...editVacData, address: e.target.value })} />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          <input style={inputStyle} placeholder="ЗП от" inputMode="numeric" value={editVacData.salary_from} onChange={(e) => setEditVacData({ ...editVacData, salary_from: e.target.value })} />
+                          <input style={inputStyle} placeholder="ЗП до" inputMode="numeric" value={editVacData.salary_to} onChange={(e) => setEditVacData({ ...editVacData, salary_to: e.target.value })} />
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            type="button"
+                            style={{ ...buttonStyle, background: "rgba(34,197,94,0.1)", borderColor: "rgba(34,197,94,0.45)", color: "#16A34A" }}
+                            disabled={editVacSaving || !editVacData.title.trim()}
+                            onClick={async () => {
+                              setEditVacSaving(true);
+                              try {
+                                const updated = await updateOpportunity(session, v.id, {
+                                  title: editVacData.title,
+                                  description: editVacData.description || null,
+                                  city: editVacData.city || null,
+                                  address: editVacData.address || null,
+                                  salary_from: editVacData.salary_from.trim() ? Number(editVacData.salary_from) : null,
+                                  salary_to: editVacData.salary_to.trim() ? Number(editVacData.salary_to) : null,
+                                });
+                                setVacancies((prev) => prev.map((x) => x.id === v.id ? updated : x));
+                                setEditingVac(null);
+                              } catch (err: any) {
+                                alert(err?.message ?? "Ошибка сохранения");
+                              } finally {
+                                setEditVacSaving(false);
+                              }
+                            }}
+                          >
+                            {editVacSaving ? "Сохраняем…" : "Сохранить"}
+                          </button>
+                          <button type="button" style={buttonStyle} onClick={() => setEditingVac(null)}>Отмена</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -462,8 +601,8 @@ export function EmployerCabinet() {
 
       {tab === "applications" && (
         <div style={cardStyle}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Отклики</div>
-          <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 14 }}>Отклики</div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
             <input
               style={{ ...inputStyle, flex: 1, minWidth: 160 }}
               placeholder="Поиск по имени соискателя…"
@@ -479,21 +618,21 @@ export function EmployerCabinet() {
             </select>
           </div>
           {appsLoading ? (
-            <div>Загрузка…</div>
+            <div style={{ color: "var(--muted)" }}>Загрузка…</div>
           ) : appsList.length === 0 ? (
             <div style={{ color: "var(--muted)", fontSize: 13 }}>Откликов не найдено.</div>
           ) : (
             <div style={{ display: "grid", gap: 10 }}>
               {appsList.map((app) => (
-                <div key={app.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 12 }}>
-                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div key={app.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 12, background: "var(--panel)" }}>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{app.applicant_full_name ?? "Аноним"}</div>
-                      <div style={{ marginTop: 2, color: "var(--muted)", fontSize: 12 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{app.applicant_full_name ?? "Аноним"}</div>
+                      <div style={{ marginTop: 2, color: "var(--muted)", fontSize: 13 }}>
                         {app.opportunity_title} • {new Date(app.created_at).toLocaleDateString("ru-RU")}
                       </div>
                       {app.cover_letter && (
-                        <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 12, lineHeight: 1.4 }}>
+                        <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13, lineHeight: 1.4 }}>
                           {app.cover_letter.slice(0, 120)}{app.cover_letter.length > 120 ? "…" : ""}
                         </div>
                       )}

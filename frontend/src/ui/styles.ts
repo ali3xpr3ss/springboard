@@ -1,26 +1,41 @@
 export const cardStyle: React.CSSProperties = {
   border: "1px solid var(--border)",
-  background: "linear-gradient(180deg, var(--panel), rgba(0,0,0,0))",
+  background: "var(--panel)",
   borderRadius: 16,
-  padding: 14,
+  padding: 16,
+  boxShadow: "0 1px 4px rgba(0,0,0,0.06), 0 0 0 0 transparent",
 };
 
 export const buttonStyle: React.CSSProperties = {
   border: "1px solid var(--border)",
-  background: "rgba(255,255,255,0.08)",
+  background: "var(--panel2)",
   color: "var(--text)",
-  borderRadius: 12,
-  padding: "10px 12px",
+  borderRadius: 8,
+  padding: "10px 14px",
   cursor: "pointer",
+  fontSize: 14,
+  fontWeight: 500,
 };
 
 export const inputStyle: React.CSSProperties = {
   width: "100%",
   border: "1px solid var(--border)",
-  background: "#0f1829",
+  background: "var(--panel)",
   color: "var(--text)",
-  borderRadius: 12,
+  borderRadius: 8,
   padding: "10px 12px",
   outline: "none",
+  fontSize: 14,
 };
 
+export const primaryButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(59,130,246,0.5)",
+  background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)",
+  color: "#FFFFFF",
+  borderRadius: 8,
+  padding: "10px 18px",
+  cursor: "pointer",
+  fontSize: 14,
+  fontWeight: 600,
+  boxShadow: "0 2px 8px rgba(59,130,246,0.25)",
+};

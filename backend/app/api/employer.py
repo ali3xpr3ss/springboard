@@ -111,6 +111,29 @@ def update_opportunity(
     return get_opportunity(o.id, db)
 
 
+@router.patch("/opportunities/{opportunity_id}/status", response_model=OpportunityOut)
+def toggle_opportunity_status(
+    opportunity_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.employer)),
+) -> OpportunityOut:
+    profile = db.scalar(select(EmployerProfile).where(EmployerProfile.user_id == user.id))
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Профиль не найден")
+    o = db.get(Opportunity, opportunity_id)
+    if not o:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Вакансия не найдена")
+    if o.employer_id != profile.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
+    if o.status == OpportunityStatus.active:
+        o.status = OpportunityStatus.closed
+    elif o.status == OpportunityStatus.closed:
+        o.status = OpportunityStatus.active
+    db.commit()
+    db.refresh(o)
+    return get_opportunity(o.id, db)
+
+
 @router.delete("/opportunities/{opportunity_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_opportunity(
     opportunity_id: int,

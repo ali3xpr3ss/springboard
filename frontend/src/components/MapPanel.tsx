@@ -108,12 +108,15 @@ export function MapPanel(props: {
                         style={{
                           marginTop: 8,
                           width: "100%",
-                          padding: "6px 0",
+                          padding: "7px 0",
                           fontSize: 12,
+                          fontWeight: 600,
                           cursor: "pointer",
-                          background: "rgba(124,58,237,0.12)",
-                          border: "1px solid rgba(124,58,237,0.4)",
-                          borderRadius: 6,
+                          background: "linear-gradient(135deg, #3B82F6, #2563EB)",
+                          border: "1px solid rgba(59,130,246,0.5)",
+                          borderRadius: 8,
+                          color: "#fff",
+                          boxShadow: "0 2px 8px rgba(59,130,246,0.25)",
                         }}
                         onClick={(e) => { e.stopPropagation(); onOpenModal(o); }}
                       >

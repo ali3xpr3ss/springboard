@@ -163,6 +163,24 @@ export async function fetchEmployerOpportunities(
   return await res.json();
 }
 
+export async function updateOpportunity(session: Session, id: number, payload: Record<string, unknown>): Promise<Opportunity> {
+  const res = await authedFetch(session, `${API_BASE}/employer/opportunities/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
+export async function toggleOpportunityStatus(session: Session, id: number): Promise<Opportunity> {
+  const res = await authedFetch(session, `${API_BASE}/employer/opportunities/${id}/status`, {
+    method: "PATCH",
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
 export async function deleteOpportunity(session: Session, id: number): Promise<void> {
   const res = await authedFetch(session, `${API_BASE}/employer/opportunities/${id}`, {
     method: "DELETE",

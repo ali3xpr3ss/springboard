@@ -2,10 +2,10 @@ import type { TagCategory, TagOut } from "../types";
 import { buttonStyle } from "../ui/styles";
 
 const CATEGORY_LABELS: Record<TagCategory, string> = {
-  tech: "Технологии",
-  level: "Уровень",
+  tech:       "Технологии",
+  level:      "Уровень",
   employment: "Занятость",
-  other: "Другое",
+  other:      "Другое",
 };
 
 type Props = {
@@ -14,6 +14,28 @@ type Props = {
   onChange: (next: Set<number>) => void;
   groupByCategory?: boolean;
 };
+
+function TagBtn({ tag, active, onToggle }: { tag: TagOut; active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className="tag-pill"
+      style={{
+        ...buttonStyle,
+        padding: "4px 10px",
+        fontSize: 12,
+        borderRadius: 999,
+        background: active ? "rgba(59,130,246,0.1)" : "var(--panel2)",
+        borderColor: active ? "rgba(59,130,246,0.45)" : "var(--border)",
+        color: active ? "#3B82F6" : "var(--text)",
+        fontWeight: active ? 600 : 400,
+      }}
+      onClick={onToggle}
+    >
+      {tag.name}
+    </button>
+  );
+}
 
 export function TagSelector({ tags, selected, onChange, groupByCategory = true }: Props) {
   function toggle(id: number) {
@@ -25,26 +47,10 @@ export function TagSelector({ tags, selected, onChange, groupByCategory = true }
 
   if (!groupByCategory) {
     return (
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {tags.map((tag) => {
-          const active = selected.has(tag.id);
-          return (
-            <button
-              key={tag.id}
-              type="button"
-              style={{
-                ...buttonStyle,
-                padding: "6px 10px",
-                fontSize: 13,
-                background: active ? "rgba(124,58,237,0.22)" : buttonStyle.background,
-                borderColor: active ? "rgba(124,58,237,0.55)" : "var(--border)",
-              }}
-              onClick={() => toggle(tag.id)}
-            >
-              {tag.name}
-            </button>
-          );
-        })}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {tags.map((tag) => (
+          <TagBtn key={tag.id} tag={tag} active={selected.has(tag.id)} onToggle={() => toggle(tag.id)} />
+        ))}
       </div>
     );
   }
@@ -56,36 +62,20 @@ export function TagSelector({ tags, selected, onChange, groupByCategory = true }
     groups.get(cat)!.push(tag);
   }
 
-  const categoryOrder: TagCategory[] = ["tech", "level", "employment", "other"];
-
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      {categoryOrder.map((cat) => {
+      {(["tech", "level", "employment", "other"] as TagCategory[]).map((cat) => {
         const group = groups.get(cat);
         if (!group?.length) return null;
         return (
           <div key={cat}>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>{CATEGORY_LABELS[cat]}</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {group.map((tag) => {
-                const active = selected.has(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    style={{
-                      ...buttonStyle,
-                      padding: "6px 10px",
-                      fontSize: 13,
-                      background: active ? "rgba(124,58,237,0.22)" : buttonStyle.background,
-                      borderColor: active ? "rgba(124,58,237,0.55)" : "var(--border)",
-                    }}
-                    onClick={() => toggle(tag.id)}
-                  >
-                    {tag.name}
-                  </button>
-                );
-              })}
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+              {CATEGORY_LABELS[cat]}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {group.map((tag) => (
+                <TagBtn key={tag.id} tag={tag} active={selected.has(tag.id)} onToggle={() => toggle(tag.id)} />
+              ))}
             </div>
           </div>
         );

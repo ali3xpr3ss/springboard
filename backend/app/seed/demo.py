@@ -1414,5 +1414,137 @@ def ensure_demo_data() -> None:
             ))
         db.commit()
 
+        # ── Демо-данные для модерации (pending employers + pending opportunities) ──
+        _pending_employers = [
+            {
+                "email": "hr@startupx.ru",
+                "display_name": "StartupX HR",
+                "company_name": "StartupX",
+                "industry": "Стартапы / EdTech",
+                "inn": "7701234567",
+                "corp_email_domain": "startupx.ru",
+            },
+            {
+                "email": "jobs@greentech.ru",
+                "display_name": "GreenTech HR",
+                "company_name": "GreenTech Solutions",
+                "industry": "Экологические технологии",
+                "inn": "7809876543",
+                "corp_email_domain": "greentech.ru",
+            },
+        ]
+        pending_emp_profiles: list[EmployerProfile] = []
+        for ed in _pending_employers:
+            existing = db.scalar(select(User).where(User.email == ed["email"]))
+            if existing:
+                ep = db.scalar(select(EmployerProfile).where(EmployerProfile.user_id == existing.id))
+            else:
+                u = User(
+                    email=ed["email"],
+                    display_name=ed["display_name"],
+                    hashed_password=hash_password("demo1234"),
+                    role=UserRole.employer,
+                    is_active=True,
+                )
+                db.add(u)
+                db.flush()
+                ep = EmployerProfile(
+                    user_id=u.id,
+                    company_name=ed["company_name"],
+                    industry=ed.get("industry"),
+                    inn=ed.get("inn"),
+                    corp_email_domain=ed.get("corp_email_domain"),
+                    verification_status="pending",
+                )
+                db.add(ep)
+                db.flush()
+            if ep:
+                pending_emp_profiles.append(ep)
+        db.commit()
+
+        # ── Pending-модерация карточки ──────────────────────────────────────────
+        _pending_opps = [
+            {
+                "title": "Python-разработчик (Junior)",
+                "description": (
+                    "StartupX — быстрорастущая EdTech-компания, создающая платформу для онлайн-образования.\n\n"
+                    "Задачи:\n"
+                    "— Разработка новых модулей на FastAPI\n"
+                    "— Работа с PostgreSQL и Redis\n"
+                    "— Участие в code review\n\n"
+                    "Требования:\n"
+                    "— Знание Python, базовый опыт с FastAPI или Django\n"
+                    "— Понимание SQL\n\n"
+                    "Условия:\n"
+                    "— Удалённо, гибкий график\n"
+                    "— Зарплата 80 000–110 000 ₽"
+                ),
+                "opportunity_type": OpportunityType.vacancy,
+                "work_format": WorkFormat.remote,
+                "city": "Москва",
+                "salary_from": 80000,
+                "salary_to": 110000,
+                "employer_idx": 0,
+            },
+            {
+                "title": "Стажировка по экологическому мониторингу",
+                "description": (
+                    "GreenTech Solutions разрабатывает системы мониторинга окружающей среды.\n\n"
+                    "Чем займёшься:\n"
+                    "— Обработка данных с IoT-датчиков на Python\n"
+                    "— Визуализация в Grafana и собственных дашбордах\n"
+                    "— Написание скриптов для автоматического анализа\n\n"
+                    "Для кого:\n"
+                    "Студенты профильных специальностей (IT, экология, физика). "
+                    "Опыт программирования на Python приветствуется.\n\n"
+                    "Условия:\n"
+                    "— Оплата 40 000–60 000 ₽\n"
+                    "— Гибридный формат, офис в Новосибирске"
+                ),
+                "opportunity_type": OpportunityType.internship,
+                "work_format": WorkFormat.hybrid,
+                "city": "Новосибирск",
+                "salary_from": 40000,
+                "salary_to": 60000,
+                "employer_idx": 1,
+            },
+            {
+                "title": "Карьерный митап StartupX 2025",
+                "description": (
+                    "StartupX приглашает студентов и молодых специалистов на карьерный митап.\n\n"
+                    "Программа:\n"
+                    "— Питч продукта: кто мы и что строим\n"
+                    "— Рассказы команды о реальных задачах\n"
+                    "— Нетворкинг с основателями и HR\n"
+                    "— Интерактивные стенды с демо продукта\n\n"
+                    "Лучшие участники получат приглашение на собеседование. "
+                    "Регистрация обязательна."
+                ),
+                "opportunity_type": OpportunityType.event,
+                "work_format": WorkFormat.office,
+                "city": "Москва",
+                "salary_from": None,
+                "salary_to": None,
+                "employer_idx": 0,
+            },
+        ]
+        for pd in _pending_opps:
+            existing_opp = db.scalar(select(Opportunity).where(Opportunity.title == pd["title"]))
+            if not existing_opp and pd["employer_idx"] < len(pending_emp_profiles):
+                ep = pending_emp_profiles[pd["employer_idx"]]
+                db.add(Opportunity(
+                    employer_id=ep.id,
+                    title=pd["title"],
+                    description=pd["description"],
+                    opportunity_type=pd["opportunity_type"],
+                    work_format=pd["work_format"],
+                    status=OpportunityStatus.pending_moderation,
+                    city=pd.get("city"),
+                    salary_from=pd.get("salary_from"),
+                    salary_to=pd.get("salary_to"),
+                    published_at=datetime.now(UTC),
+                ))
+        db.commit()
+
     finally:
         db.close()

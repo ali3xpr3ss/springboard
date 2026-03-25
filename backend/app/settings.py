@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     jwt_access_ttl_min: int = 30
     jwt_refresh_ttl_days: int = 30
 
-    admin_email: str = "admin@tramplin.local"
+    admin_email: str = "admin@gmail.com"
     admin_password: str = "admin"
     admin_display_name: str = "Администратор"
 

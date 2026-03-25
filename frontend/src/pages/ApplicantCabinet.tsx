@@ -32,14 +32,14 @@ const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:80
 
 type Tab = "profile" | "applications" | "skills" | "favorites";
 
-const STATUS_MAP: Record<ApplicationStatus, { bg: string; border: string; label: string }> = {
-  pending:  { bg: "rgba(255,255,255,0.08)", border: "var(--border)",          label: "На рассмотрении" },
-  accepted: { bg: "rgba(34,197,94,0.18)",   border: "rgba(34,197,94,0.5)",    label: "Принят" },
-  rejected: { bg: "rgba(245,158,11,0.12)",  border: "rgba(245,158,11,0.45)", label: "Отклонён" },
-  reserve:  { bg: "rgba(124,58,237,0.22)",  border: "rgba(124,58,237,0.55)", label: "Резерв" },
+const STATUS_MAP: Record<ApplicationStatus, { bg: string; border: string; label: string; color: string }> = {
+  pending:  { bg: "var(--panel2)",             border: "var(--border)",              label: "На рассмотрении", color: "var(--muted)" },
+  accepted: { bg: "rgba(34,197,94,0.1)",        border: "rgba(34,197,94,0.4)",        label: "Принят",          color: "#16A34A" },
+  rejected: { bg: "rgba(239,68,68,0.08)",       border: "rgba(239,68,68,0.35)",       label: "Отклонён",        color: "#DC2626" },
+  reserve:  { bg: "rgba(59,130,246,0.1)",       border: "rgba(59,130,246,0.4)",       label: "Резерв",          color: "#3B82F6" },
 };
 
-const tabActiveStyle = { background: "rgba(124,58,237,0.22)", borderColor: "rgba(124,58,237,0.55)" };
+const tabActiveStyle = { background: "rgba(59,130,246,0.1)", borderColor: "rgba(59,130,246,0.45)", color: "#3B82F6" };
 
 const TAB_LABELS: Record<Tab, string> = {
   profile: "Профиль",
@@ -70,7 +70,7 @@ export function ApplicantCabinet() {
   const [favItems, setFavItems] = useState<Opportunity[]>([]);
   const [favLoading, setFavLoading] = useState(false);
   const [selectedFavOpp, setSelectedFavOpp] = useState<Opportunity | null>(null);
-  const [favApplyTarget, setFavApplyTarget] = useState<number | null>(null);
+  const [favApplyTarget, setFavApplyTarget] = useState<{ id: number; type: string } | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -127,8 +127,8 @@ export function ApplicantCabinet() {
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={cardStyle}>
-        <div style={{ fontWeight: 900, fontSize: 16 }}>Кабинет соискателя</div>
-        <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 700, fontSize: 16 }}>Кабинет соискателя</div>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
           {(["profile", "applications", "skills", "favorites"] as Tab[]).map((t) => (
             <button
               key={t}
@@ -144,16 +144,16 @@ export function ApplicantCabinet() {
 
       {tab === "profile" && (
         <div style={cardStyle}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Профиль</div>
-          <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 12 }}>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Профиль</div>
+          <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 13 }}>
             Настройки приватности: кто видит резюме и историю откликов.
           </div>
 
-          {error ? <div style={{ marginTop: 10, color: "rgba(245,158,11,0.95)", whiteSpace: "pre-wrap" }}>{error}</div> : null}
-          {!p ? <div style={{ marginTop: 10 }}>Загрузка…</div> : null}
+          {error ? <div style={{ marginTop: 10, color: "#B45309", whiteSpace: "pre-wrap", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 8, padding: "8px 12px", fontSize: 13 }}>{error}</div> : null}
+          {!p ? <div style={{ marginTop: 10, color: "var(--muted)" }}>Загрузка…</div> : null}
 
           {p ? (
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+            <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <input style={inputStyle} placeholder="ФИО" value={p.full_name ?? ""} onChange={(e) => setP({ ...p, full_name: e.target.value })} />
                 <input style={inputStyle} placeholder="ВУЗ" value={p.university ?? ""} onChange={(e) => setP({ ...p, university: e.target.value })} />
@@ -164,10 +164,10 @@ export function ApplicantCabinet() {
               </div>
 
               <div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Резюме / портфолио</div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>Резюме / портфолио</div>
                 {p.resume_url && (
-                  <div style={{ marginBottom: 6, fontSize: 12 }}>
-                    <a href={p.resume_url} target="_blank" rel="noreferrer" style={{ color: "rgba(124,58,237,0.9)" }}>
+                  <div style={{ marginBottom: 8, fontSize: 13 }}>
+                    <a href={p.resume_url} target="_blank" rel="noreferrer" style={{ color: "#3B82F6" }}>
                       {p.resume_url.includes("/static/") ? "Загруженный файл" : p.resume_url}
                     </a>
                   </div>
@@ -176,7 +176,7 @@ export function ApplicantCabinet() {
                   type="file"
                   accept="application/pdf,image/*"
                   disabled={resumeUploading}
-                  style={{ display: "block", fontSize: 12, color: "var(--muted)" }}
+                  style={{ display: "block", fontSize: 13, color: "var(--muted)" }}
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
@@ -191,7 +191,7 @@ export function ApplicantCabinet() {
                     }
                   }}
                 />
-                {resumeUploading && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Загрузка…</div>}
+                {resumeUploading && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>Загрузка…</div>}
               </div>
 
               <textarea style={{ ...inputStyle, minHeight: 110, resize: "vertical" }} placeholder="О себе" value={p.bio ?? ""} onChange={(e) => setP({ ...p, bio: e.target.value })} />
@@ -217,7 +217,7 @@ export function ApplicantCabinet() {
 
               <button
                 type="button"
-                style={{ ...buttonStyle, background: "rgba(34,197,94,0.18)", borderColor: "rgba(34,197,94,0.5)" }}
+                style={{ ...buttonStyle, background: "rgba(34,197,94,0.1)", borderColor: "rgba(34,197,94,0.45)", color: "#16A34A" }}
                 disabled={saving || resumeUploading}
                 onClick={async () => {
                   setSaving(true);
@@ -246,26 +246,26 @@ export function ApplicantCabinet() {
 
       {tab === "applications" && (
         <div style={cardStyle}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Мои отклики</div>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Мои отклики</div>
           {appsLoading ? (
-            <div style={{ marginTop: 10 }}>Загрузка…</div>
+            <div style={{ marginTop: 12, color: "var(--muted)" }}>Загрузка…</div>
           ) : apps.length === 0 ? (
-            <div style={{ marginTop: 10, color: "var(--muted)", fontSize: 13 }}>Откликов пока нет.</div>
+            <div style={{ marginTop: 12, color: "var(--muted)", fontSize: 13 }}>Откликов пока нет.</div>
           ) : (
             <>
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
                 {appsPage_items.map((app) => {
                   const s = STATUS_MAP[app.status];
                   return (
                     <div
                       key={app.id}
-                      style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 12, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer" }}
+                      style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 12, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", background: "var(--panel)" }}
                       onClick={() => setSelectedAppOpp(app.opportunity)}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{app.opportunity.title}</div>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{app.opportunity.title}</div>
                         {app.opportunity.company_name && (
-                          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{app.opportunity.company_name}</div>
+                          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{app.opportunity.company_name}</div>
                         )}
                         <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 12 }}>
                           Отклик: {new Date(app.created_at).toLocaleDateString("ru-RU")}
@@ -276,7 +276,7 @@ export function ApplicantCabinet() {
                           </div>
                         )}
                       </div>
-                      <span style={{ flexShrink: 0, fontSize: 12, padding: "3px 10px", borderRadius: 999, border: `1px solid ${s.border}`, background: s.bg }}>
+                      <span style={{ flexShrink: 0, fontSize: 12, padding: "3px 10px", borderRadius: 999, border: `1px solid ${s.border}`, background: s.bg, color: s.color, fontWeight: 500 }}>
                         {s.label}
                       </span>
                     </div>
@@ -291,9 +291,9 @@ export function ApplicantCabinet() {
 
       {tab === "skills" && (
         <div style={cardStyle}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Навыки</div>
-          <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 12 }}>Выбери технологии, которыми владеешь.</div>
-          <div style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Навыки</div>
+          <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 13 }}>Выбери технологии, которыми владеешь.</div>
+          <div style={{ marginTop: 14 }}>
             {techTags.length === 0 ? (
               <div style={{ color: "var(--muted)", fontSize: 13 }}>Теги не загружены.</div>
             ) : (
@@ -302,7 +302,7 @@ export function ApplicantCabinet() {
           </div>
           <button
             type="button"
-            style={{ ...buttonStyle, marginTop: 14, background: "rgba(34,197,94,0.18)", borderColor: "rgba(34,197,94,0.5)" }}
+            style={{ ...buttonStyle, marginTop: 14, background: "rgba(34,197,94,0.1)", borderColor: "rgba(34,197,94,0.45)", color: "#16A34A" }}
             disabled={skillSaving}
             onClick={async () => {
               setSkillSaving(true);
@@ -328,15 +328,15 @@ export function ApplicantCabinet() {
 
       {tab === "favorites" && (
         <div style={cardStyle}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Избранное</div>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Избранное</div>
           {favLoading ? (
-            <div style={{ marginTop: 10 }}>Загрузка…</div>
+            <div style={{ marginTop: 12, color: "var(--muted)" }}>Загрузка…</div>
           ) : favItems.length === 0 ? (
-            <div style={{ marginTop: 10, color: "var(--muted)", fontSize: 13 }}>
+            <div style={{ marginTop: 12, color: "var(--muted)", fontSize: 13 }}>
               Нет избранных вакансий. Добавляй интересные позиции на главной странице с помощью ★.
             </div>
           ) : (
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+            <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
               {favItems.map((o) => {
                 const salary = (() => {
                   const a = o.salary_from, b = o.salary_to;
@@ -348,22 +348,22 @@ export function ApplicantCabinet() {
                 return (
                   <div
                     key={o.id}
-                    style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 12, cursor: "pointer", display: "flex", gap: 12, alignItems: "flex-start" }}
+                    style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 12, cursor: "pointer", display: "flex", gap: 12, alignItems: "flex-start", background: "var(--panel)" }}
                     onClick={() => setSelectedFavOpp(o)}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {o.company_name && (
                         <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 2 }}>{o.company_name}</div>
                       )}
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{o.title}</div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{o.title}</div>
                       <div style={{ marginTop: 4, display: "flex", gap: 8, flexWrap: "wrap", color: "var(--muted)", fontSize: 12 }}>
                         {o.city && <span>{o.city}</span>}
-                        {salary && <span style={{ color: "rgba(255,255,255,0.85)" }}>{salary}</span>}
+                        {salary && <span style={{ color: "var(--text)", fontWeight: 600 }}>{salary}</span>}
                       </div>
                       {o.tags?.length ? (
                         <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
                           {o.tags.slice(0, 4).map((t) => (
-                            <span key={t.id} style={{ fontSize: 11, border: "1px solid var(--border)", background: "rgba(255,255,255,0.05)", padding: "1px 7px", borderRadius: 999 }}>
+                            <span key={t.id} style={{ fontSize: 11, border: "1px solid var(--border)", background: "var(--panel2)", padding: "1px 7px", borderRadius: 999, color: "var(--muted)" }}>
                               {t.name}
                             </span>
                           ))}
@@ -374,7 +374,7 @@ export function ApplicantCabinet() {
                     <button
                       type="button"
                       title="Убрать из избранного"
-                      style={{ ...buttonStyle, flexShrink: 0, padding: "6px 10px", fontSize: 15, background: "rgba(245,158,11,0.18)", borderColor: "rgba(245,158,11,0.6)" }}
+                      style={{ ...buttonStyle, flexShrink: 0, padding: "6px 10px", fontSize: 15, background: "rgba(245,158,11,0.1)", borderColor: "rgba(245,158,11,0.45)", color: "#D97706" }}
                       onClick={(e) => {
                         e.stopPropagation();
                         const next = new Set(toggleFavorite(o.id));
@@ -398,6 +398,7 @@ export function ApplicantCabinet() {
           session={session}
           onClose={() => setSelectedAppOpp(null)}
           onApply={() => setSelectedAppOpp(null)}
+          hideApply
         />
       )}
 
@@ -406,7 +407,7 @@ export function ApplicantCabinet() {
           opportunity={selectedFavOpp}
           session={session}
           onClose={() => setSelectedFavOpp(null)}
-          onApply={(id) => { setFavApplyTarget(id); setSelectedFavOpp(null); }}
+          onApply={(id, type) => { setFavApplyTarget({ id, type }); setSelectedFavOpp(null); }}
           isFavorite={favIds.has(selectedFavOpp.id)}
           onToggleFavorite={(id) => {
             const next = new Set(toggleFavorite(id));
@@ -420,8 +421,9 @@ export function ApplicantCabinet() {
       )}
       {favApplyTarget !== null && session && (
         <ApplyModal
-          opportunityId={favApplyTarget}
-          opportunityTitle={favItems.find((o) => o.id === favApplyTarget)?.title ?? ""}
+          opportunityId={favApplyTarget.id}
+          opportunityTitle={favItems.find((o) => o.id === favApplyTarget.id)?.title ?? ""}
+          opportunityType={favApplyTarget.type}
           session={session}
           onClose={() => setFavApplyTarget(null)}
           onSuccess={() => setFavApplyTarget(null)}

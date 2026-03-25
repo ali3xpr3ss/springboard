@@ -32,6 +32,12 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenPa
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email уже зарегистрирован")
 
+    if payload.role == UserRole.curator:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Регистрация кураторов закрыта. Аккаунты кураторов создаются администратором.",
+        )
+
     user = User(
         email=payload.email,
         display_name=payload.display_name,
